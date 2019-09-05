@@ -14,8 +14,8 @@ namespace OpenTibia.Data.Models
     public class Stat : IStat
     {
         [Key]
-        public int PlayersOnline { get; set; }
+        public int PlayersOnline { get; }
 
-        public int RecordOnline { get; set; }
+        public int RecordOnline { get; }
     }
 }

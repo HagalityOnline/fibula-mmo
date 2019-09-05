@@ -7,7 +7,7 @@
 namespace OpenTibia.Server.Scripting
 {
     using System;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Server.Contracts.Structs;
 
     public static class CustomConvertersFactory
     {

@@ -9,9 +9,11 @@ namespace OpenTibia.Server.Items
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Server.Contracts;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Parsing;
 
     public class Container : Item, IContainer
@@ -24,7 +26,7 @@ namespace OpenTibia.Server.Items
 
         public IList<IItem> Content { get; }
 
-        public Dictionary<uint, byte> OpenedBy { get; }
+        public IDictionary<Guid, byte> OpenedBy { get; }
 
         private readonly object openedByLock;
 
@@ -32,11 +34,15 @@ namespace OpenTibia.Server.Items
 
         public new Location Location => this.Parent?.Location ?? base.Location;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Container"/> class.
+        /// </summary>
+        /// <param name="type"></param>
         public Container(ItemType type)
             : base(type)
         {
             this.Content = new List<IItem>();
-            this.OpenedBy = new Dictionary<uint, byte>();
+            this.OpenedBy = new Dictionary<Guid, byte>();
             this.openedByLock = new object();
 
             this.OnContentUpdated += Game.Instance.OnContainerContentUpdated;
@@ -52,10 +58,7 @@ namespace OpenTibia.Server.Items
         // }
         public override void AddContent(IEnumerable<object> contentObjs)
         {
-            if (contentObjs == null)
-            {
-                throw new ArgumentNullException(nameof(contentObjs));
-            }
+            contentObjs.ThrowIfNull(nameof(contentObjs));
 
             var content = contentObjs.Cast<CipElement>();
 
@@ -75,9 +78,7 @@ namespace OpenTibia.Server.Items
 
                 try
                 {
-                    var item = ItemFactory.Create((ushort)element.Data) as IItem;
-
-                    if (item == null)
+                    if (!(ItemFactory.Create((ushort)element.Data) is IItem item))
                     {
                         if (!ServerConfiguration.SupressInvalidItemWarnings)
                         {
@@ -107,7 +108,7 @@ namespace OpenTibia.Server.Items
         /// Attempts to add the joined item to this container's content at the default index.
         /// </summary>
         /// <param name="otherItem">The item to add.</param>
-        /// <returns>True if the operation was successful, false otherwise</returns>
+        /// <returns>True if the operation was successful, false otherwise.</returns>
         public override bool Join(IItem otherItem)
         {
             if (this.Content.Count >= this.Volume)
@@ -126,10 +127,7 @@ namespace OpenTibia.Server.Items
 
         public bool AddContent(IItem item, byte index)
         {
-            if (item == null)
-            {
-                throw new ArgumentNullException(nameof(item));
-            }
+            item.ThrowIfNull(nameof(item));
 
             // Validate that the item being added is not a parent of this item.
             if (this.IsChildOf(item))

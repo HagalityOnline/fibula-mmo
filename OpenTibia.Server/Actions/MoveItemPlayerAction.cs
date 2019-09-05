@@ -7,16 +7,20 @@
 namespace OpenTibia.Server.Actions
 {
     using System;
-    using System.Threading.Tasks;
-    using OpenTibia.Communications.Packets.Incoming;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Movement;
 
     internal class MoveItemPlayerAction : BasePlayerAction
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MoveItemPlayerAction"/> class.
+        /// </summary>
+        /// <param name="player"></param>
+        /// <param name="itemMovePacket"></param>
+        /// <param name="retryAtLocation"></param>
         public MoveItemPlayerAction(IPlayer player, ItemMovePacket itemMovePacket, Location retryAtLocation)
             : base(player, itemMovePacket, retryAtLocation)
         {
@@ -24,9 +28,7 @@ namespace OpenTibia.Server.Actions
 
         protected override void InternalPerform()
         {
-            var itemMovePacket = this.Packet as ItemMovePacket;
-
-            if (itemMovePacket == null)
+            if (!(this.Packet is ItemMovePacket itemMovePacket))
             {
                 return;
             }
@@ -59,13 +61,13 @@ namespace OpenTibia.Server.Actions
             switch (itemMovePacket.ToLocation.Type)
             {
                 case LocationType.Ground:
-                    movement = new ThingMovementSlotToGround(this.Player.CreatureId, thing, itemMovePacket.FromLocation, itemMovePacket.ToLocation, itemMovePacket.Count);
+                    movement = new ThingMovementSlotToGround(this.Player.Id, thing, itemMovePacket.FromLocation, itemMovePacket.ToLocation, itemMovePacket.Count);
                     break;
                 case LocationType.Container:
-                    movement = new ThingMovementSlotToContainer(this.Player.CreatureId, thing, itemMovePacket.FromLocation, itemMovePacket.ToLocation, itemMovePacket.Count);
+                    movement = new ThingMovementSlotToContainer(this.Player.Id, thing, itemMovePacket.FromLocation, itemMovePacket.ToLocation, itemMovePacket.Count);
                     break;
                 case LocationType.Slot:
-                    movement = new ThingMovementSlotToSlot(this.Player.CreatureId, thing, itemMovePacket.FromLocation, itemMovePacket.ToLocation, itemMovePacket.Count);
+                    movement = new ThingMovementSlotToSlot(this.Player.Id, thing, itemMovePacket.FromLocation, itemMovePacket.ToLocation, itemMovePacket.Count);
                     break;
             }
 
@@ -87,13 +89,13 @@ namespace OpenTibia.Server.Actions
             switch (itemMovePacket.ToLocation.Type)
             {
                 case LocationType.Ground:
-                    movement = new ThingMovementContainerToGround(this.Player.CreatureId, thing, itemMovePacket.FromLocation, itemMovePacket.ToLocation, itemMovePacket.Count);
+                    movement = new ThingMovementContainerToGround(this.Player.Id, thing, itemMovePacket.FromLocation, itemMovePacket.ToLocation, itemMovePacket.Count);
                     break;
                 case LocationType.Container:
-                    movement = new ThingMovementContainerToContainer(this.Player.CreatureId, thing, itemMovePacket.FromLocation, itemMovePacket.ToLocation, itemMovePacket.Count);
+                    movement = new ThingMovementContainerToContainer(this.Player.Id, thing, itemMovePacket.FromLocation, itemMovePacket.ToLocation, itemMovePacket.Count);
                     break;
                 case LocationType.Slot:
-                    movement = new ThingMovementContainerToSlot(this.Player.CreatureId, thing, itemMovePacket.FromLocation, itemMovePacket.ToLocation, itemMovePacket.Count);
+                    movement = new ThingMovementContainerToSlot(this.Player.Id, thing, itemMovePacket.FromLocation, itemMovePacket.ToLocation, itemMovePacket.Count);
                     break;
             }
 
@@ -118,19 +120,19 @@ namespace OpenTibia.Server.Actions
                     if (thing is ICreature)
                     {
                         delayTime = TimeSpan.FromSeconds(1);
-                        movement = new CreatureMovementOnMap(this.Player.CreatureId, thing as ICreature, itemMovePacket.FromLocation, itemMovePacket.ToLocation);
+                        movement = new CreatureMovementOnMap(this.Player.Id, thing as ICreature, itemMovePacket.FromLocation, itemMovePacket.ToLocation);
                     }
                     else
                     {
-                        movement = new ThingMovementOnMap(this.Player.CreatureId, thing, itemMovePacket.FromLocation, itemMovePacket.FromStackPos, itemMovePacket.ToLocation, itemMovePacket.Count);
+                        movement = new OnMapMovementEvent(this.Player.Id, thing, itemMovePacket.FromLocation, itemMovePacket.FromStackPos, itemMovePacket.ToLocation, itemMovePacket.Count);
                     }
 
                     break;
                 case LocationType.Container:
-                    movement = new ThingMovementGroundToContainer(this.Player.CreatureId, thing, itemMovePacket.FromLocation, itemMovePacket.FromStackPos, itemMovePacket.ToLocation, itemMovePacket.Count);
+                    movement = new ThingMovementGroundToContainer(this.Player.Id, thing, itemMovePacket.FromLocation, itemMovePacket.FromStackPos, itemMovePacket.ToLocation, itemMovePacket.Count);
                     break;
                 case LocationType.Slot:
-                    movement = new ThingMovementGroundToSlot(this.Player.CreatureId, thing, itemMovePacket.FromLocation, itemMovePacket.FromStackPos, itemMovePacket.ToLocation, itemMovePacket.Count);
+                    movement = new ThingMovementGroundToSlot(this.Player.Id, thing, itemMovePacket.FromLocation, itemMovePacket.FromStackPos, itemMovePacket.ToLocation, itemMovePacket.Count);
                     break;
             }
 

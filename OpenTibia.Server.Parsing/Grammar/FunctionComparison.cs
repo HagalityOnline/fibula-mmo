@@ -6,7 +6,7 @@
 
 namespace OpenTibia.Server.Parsing.Grammar
 {
-    using OpenTibia.Data.Contracts;
+    using OpenTibia.Data.Contracts.Enumerations;
 
     public class FunctionComparison
     {
@@ -18,6 +18,13 @@ namespace OpenTibia.Server.Parsing.Grammar
 
         public string CompareToIdentifier { get; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="FunctionComparison"/> class.
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="comparisonType"></param>
+        /// <param name="comparingTo"></param>
+        /// <param name="parameters"></param>
         public FunctionComparison(string name, string comparisonType, string comparingTo, params string[] parameters)
         {
             this.Name = name;

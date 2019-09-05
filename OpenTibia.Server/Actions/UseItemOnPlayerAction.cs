@@ -8,14 +8,19 @@ namespace OpenTibia.Server.Actions
 {
     using System;
     using System.Linq;
-    using OpenTibia.Communications.Packets.Incoming;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Events;
 
     internal class UseItemOnPlayerAction : BasePlayerAction
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="UseItemOnPlayerAction"/> class.
+        /// </summary>
+        /// <param name="player"></param>
+        /// <param name="useOnPacket"></param>
+        /// <param name="retryLocation"></param>
         public UseItemOnPlayerAction(IPlayer player, ItemUseOnPacket useOnPacket, Location retryLocation)
             : base(player, useOnPacket, retryLocation)
         {
@@ -23,9 +28,7 @@ namespace OpenTibia.Server.Actions
 
         protected override void InternalPerform()
         {
-            var useOnPacket = this.Packet as ItemUseOnPacket;
-
-            if (useOnPacket == null)
+            if (!(this.Packet is ItemUseOnPacket useOnPacket))
             {
                 return;
             }

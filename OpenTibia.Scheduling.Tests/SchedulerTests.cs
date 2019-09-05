@@ -7,11 +7,13 @@
 namespace OpenTibia.Scheduling.Tests
 {
     using System;
+    using System.Threading;
     using System.Threading.Tasks;
     using Microsoft.VisualStudio.TestTools.UnitTesting;
     using Moq;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.TestUtils;
+    using OpenTibia.Common.Utilities.Testing;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Scheduling.Contracts.Enumerations;
 
     /// <summary>
     /// Tests for the <see cref="Scheduler"/> class
@@ -25,9 +27,9 @@ namespace OpenTibia.Scheduling.Tests
         [TestMethod]
         public void Scheduler_Initialization()
         {
-            DateTime anyNonDefaultDateTime = DateTime.Now;
-            DateTime defaultDateTime = default(DateTime);
-            DateTime invalidDateTime = DateTime.Now - TimeSpan.FromHours(1);
+            DateTimeOffset anyNonDefaultDateTime = DateTimeOffset.UtcNow;
+            DateTimeOffset defaultDateTime = default;
+            DateTimeOffset invalidDateTime = DateTimeOffset.UtcNow - TimeSpan.FromHours(1);
 
             // use a default time for the reference time.
             Assert.ThrowsException<ArgumentException>(() => new Scheduler(defaultDateTime));
@@ -45,7 +47,7 @@ namespace OpenTibia.Scheduling.Tests
         [TestMethod]
         public void InmediateEvent_Throws_WhenBad()
         {
-            DateTime anyNonDefaultDateTime = DateTime.Now;
+            DateTimeOffset anyNonDefaultDateTime = DateTimeOffset.UtcNow;
 
             Scheduler scheduler = new Scheduler(anyNonDefaultDateTime);
 
@@ -57,16 +59,15 @@ namespace OpenTibia.Scheduling.Tests
         }
 
         /// <summary>
-        /// Checks that <see cref="Scheduler.ScheduleEvent(IEvent, DateTime)"/> throws when needed.
+        /// Checks that <see cref="Scheduler.ScheduleEvent(IEvent, DateTimeOffset)"/> throws when needed.
         /// </summary>
         [TestMethod]
         public void ScheduleEvent_Throws_WhenBad()
         {
-            DateTime anyNonDefaultDateTime = DateTime.Now;
-            DateTime defaultDateTime = default(DateTime);
-            DateTime invalidRunAtDateTime = anyNonDefaultDateTime - TimeSpan.FromMilliseconds(1);
-            DateTime validRunAtDateTime = anyNonDefaultDateTime + TimeSpan.FromMilliseconds(1);
-            DateTime twoSecondsFromNowDateTime = anyNonDefaultDateTime + TimeSpan.FromSeconds(2);
+            DateTimeOffset anyNonDefaultDateTime = DateTimeOffset.UtcNow;
+            DateTimeOffset invalidRunAtDateTime = anyNonDefaultDateTime - TimeSpan.FromMilliseconds(1);
+            DateTimeOffset validRunAtDateTime = anyNonDefaultDateTime + TimeSpan.FromMilliseconds(1);
+            DateTimeOffset twoSecondsFromNowDateTime = anyNonDefaultDateTime + TimeSpan.FromSeconds(2);
 
             Scheduler scheduler = new Scheduler(anyNonDefaultDateTime);
 
@@ -76,9 +77,7 @@ namespace OpenTibia.Scheduling.Tests
 
             ExceptionAssert.Throws<ArgumentException>(() => scheduler.ScheduleEvent(eventMock.Object, validRunAtDateTime), $"Argument must be of type {nameof(BaseEvent)}.{Environment.NewLine}Parameter name: eventToSchedule");
 
-            Mock<BaseEvent> bEventMock = new Mock<BaseEvent>();
-
-            ExceptionAssert.Throws<ArgumentException>(() => scheduler.ScheduleEvent(bEventMock.Object, defaultDateTime), $"Parameter runAt has the default value.");
+            Mock<BaseEvent> bEventMock = new Mock<BaseEvent>(EvaluationTime.OnExecute);
 
             ExceptionAssert.Throws<ArgumentException>(() => scheduler.ScheduleEvent(bEventMock.Object, invalidRunAtDateTime), $"Value cannot be earlier than the reference time of the scheduler: {anyNonDefaultDateTime}.{Environment.NewLine}Parameter name: runAt");
 
@@ -97,15 +96,15 @@ namespace OpenTibia.Scheduling.Tests
             TimeSpan overheadDelay = TimeSpan.FromMilliseconds(100);
             TimeSpan twoSecondsTimeSpan = TimeSpan.FromSeconds(2);
             TimeSpan threeSecondsTimeSpan = TimeSpan.FromSeconds(3);
-            DateTime anyNonDefaultDateTime = DateTime.Now;
-            DateTime twoSecondsFromNowDate = anyNonDefaultDateTime + twoSecondsTimeSpan;
+            DateTimeOffset anyNonDefaultDateTime = DateTimeOffset.UtcNow;
+            DateTimeOffset twoSecondsFromNowDate = anyNonDefaultDateTime + twoSecondsTimeSpan;
 
             const int ExpectedCounterValueBeforeRun = 0;
             const int ExpectedCounterValueAfterRun = 0;
 
             var scheduledEventFiredCounter = 0;
 
-            Mock<BaseEvent> bEventMockForScheduled = new Mock<BaseEvent>();
+            Mock<BaseEvent> bEventMockForScheduled = new Mock<BaseEvent>(EvaluationTime.OnExecute);
 
             Scheduler scheduler = new Scheduler(anyNonDefaultDateTime);
 
@@ -155,8 +154,8 @@ namespace OpenTibia.Scheduling.Tests
             TimeSpan overheadDelay = TimeSpan.FromMilliseconds(100);
             TimeSpan twoSecondsTimeSpan = TimeSpan.FromSeconds(2);
             TimeSpan threeSecondsTimeSpan = TimeSpan.FromSeconds(3);
-            DateTime anyNonDefaultDateTime = DateTime.Now;
-            DateTime twoSecondsFromNowDate = anyNonDefaultDateTime + twoSecondsTimeSpan;
+            DateTimeOffset anyNonDefaultDateTime = DateTimeOffset.UtcNow;
+            DateTimeOffset twoSecondsFromNowDate = anyNonDefaultDateTime + twoSecondsTimeSpan;
 
             const uint anyRequestorId = 100u;
             const int ExpectedCounterValueBeforeRun = 0;
@@ -164,9 +163,9 @@ namespace OpenTibia.Scheduling.Tests
 
             var scheduledEventFiredCounter = 0;
 
-            Mock<BaseEvent> bEventMockForScheduled1 = new Mock<BaseEvent>(anyRequestorId);
-            Mock<BaseEvent> bEventMockForScheduled2 = new Mock<BaseEvent>(anyRequestorId);
-            Mock<BaseEvent> bEventMockForScheduled3 = new Mock<BaseEvent>(anyRequestorId);
+            Mock<BaseEvent> bEventMockForScheduled1 = new Mock<BaseEvent>(anyRequestorId, EvaluationTime.OnExecute);
+            Mock<BaseEvent> bEventMockForScheduled2 = new Mock<BaseEvent>(anyRequestorId, EvaluationTime.OnExecute);
+            Mock<BaseEvent> bEventMockForScheduled3 = new Mock<BaseEvent>(anyRequestorId, EvaluationTime.OnExecute);
 
             Scheduler scheduler = new Scheduler(anyNonDefaultDateTime);
 
@@ -217,11 +216,11 @@ namespace OpenTibia.Scheduling.Tests
 
             TimeSpan twoSecondsTimeSpan = TimeSpan.FromSeconds(2);
             TimeSpan overheadDelay = TimeSpan.FromMilliseconds(100);
-            DateTime anyNonDefaultDateTime = DateTime.Now;
-            DateTime twoSecondsFromNowDate = anyNonDefaultDateTime + twoSecondsTimeSpan;
+            DateTimeOffset anyNonDefaultDateTime = DateTimeOffset.UtcNow;
+            DateTimeOffset twoSecondsFromNowDate = anyNonDefaultDateTime + twoSecondsTimeSpan;
 
-            Mock<BaseEvent> bEventMockForInmediate = new Mock<BaseEvent>();
-            Mock<BaseEvent> bEventMockForScheduled = new Mock<BaseEvent>();
+            Mock<BaseEvent> bEventMockForInmediate = new Mock<BaseEvent>(EvaluationTime.OnExecute);
+            Mock<BaseEvent> bEventMockForScheduled = new Mock<BaseEvent>(EvaluationTime.OnExecute);
 
             Scheduler scheduler = new Scheduler(anyNonDefaultDateTime);
 
@@ -245,6 +244,9 @@ namespace OpenTibia.Scheduling.Tests
                     scheduledEventFiredCounter++;
                 }
             };
+
+            // start the scheduler.
+            scheduler.RunAsync(CancellationToken.None);
 
             // fire a scheduled event that shall be fired only after some seconds.
             scheduler.ScheduleEvent(bEventMockForScheduled.Object, twoSecondsFromNowDate);

@@ -8,12 +8,16 @@ namespace OpenTibia.Server
 {
     using System;
     using OpenTibia.Common.Helpers;
-    using OpenTibia.Scheduling.Contracts;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
 
     internal class GenericEventAction : IEventAction
     {
-        private Action action;
+        private readonly Action action;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="GenericEventAction"/> class.
+        /// </summary>
+        /// <param name="action"></param>
         public GenericEventAction(Action action)
         {
             action.ThrowIfNull();

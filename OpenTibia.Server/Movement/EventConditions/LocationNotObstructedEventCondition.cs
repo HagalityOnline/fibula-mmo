@@ -6,9 +6,9 @@
 
 namespace OpenTibia.Server.Movement.EventConditions
 {
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
 
     /// <summary>
     /// Class that represents an event condition that evaluates whether a location is not obstructed.
@@ -65,9 +65,7 @@ namespace OpenTibia.Server.Movement.EventConditions
                 return false;
             }
 
-            var thingAsItem = this.Thing as IItem;
-
-            if (thingAsItem != null)
+            if (this.Thing is IItem thingAsItem)
             {
                 if (destTile.BlocksLay || (thingAsItem.BlocksPass && destTile.BlocksPass))
                 {

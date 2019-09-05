@@ -14,36 +14,36 @@ namespace OpenTibia.Data.Models
     public class House : IAuction
     {
         [Key]
-        public short HouseId { get; set; }
+        public short HouseId { get; }
 
-        public string HouseName { get; set; }
+        public string HouseName { get; }
 
-        public short RentOffset { get; set; }
+        public short RentOffset { get; }
 
-        public short Area { get; set; }
+        public short Area { get; }
 
-        public byte GuildHouse { get; set; }
+        public byte GuildHouse { get; }
 
-        public short Sqm { get; set; }
+        public short Sqm { get; }
 
-        public string Description { get; set; }
+        public string Description { get; }
 
-        public string Coords { get; set; }
+        public string Coords { get; }
 
-        public int Price { get; set; }
+        public int Price { get; }
 
-        public int PriceOld { get; set; }
+        public int PriceOld { get; }
 
-        public byte Auctioned { get; set; }
+        public byte Auctioned { get; }
 
-        public byte AuctionDays { get; set; }
+        public byte AuctionDays { get; }
 
-        public int Bid { get; set; }
+        public int Bid { get; }
 
-        public int BidderId { get; set; }
+        public int BidderId { get; }
 
-        public byte PricePerSqm { get; set; }
+        public byte PricePerSqm { get; }
 
-        public int Bidlimit { get; set; }
+        public int Bidlimit { get; }
     }
 }

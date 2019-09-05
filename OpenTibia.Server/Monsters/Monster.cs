@@ -8,8 +8,8 @@ namespace OpenTibia.Server.Monsters
 {
     using System;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
 
     public class Monster : Creature
     {
@@ -29,8 +29,13 @@ namespace OpenTibia.Server.Monsters
 
         public override byte AutoAttackRange => (byte)(this.Type.Flags.Contains(CreatureFlag.DistanceFighting) ? 5 : 1);
 
-        public Monster(MonsterType monsterType)
-            : base(GetNewId(), monsterType.Name, monsterType.Article, monsterType.MaxHitPoints, monsterType.MaxManaPoints, monsterType.Corpse)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Monster"/> class.
+        /// </summary>
+        /// <param name="gameInstance"></param>
+        /// <param name="monsterType"></param>
+        public Monster(IGame gameInstance, MonsterType monsterType)
+            : base(gameInstance, GetNewId(), monsterType.Name, monsterType.Article, monsterType.MaxHitPoints, monsterType.MaxManaPoints, monsterType.Corpse)
         {
             this.Type = monsterType;
             this.Experience = monsterType.Experience;

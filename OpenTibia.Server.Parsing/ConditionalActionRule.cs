@@ -15,6 +15,11 @@ namespace OpenTibia.Server.Parsing
 
         public IList<string> ActionSet { get; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ConditionalActionRule"/> class.
+        /// </summary>
+        /// <param name="conditions"></param>
+        /// <param name="actions"></param>
         public ConditionalActionRule(IEnumerable<string> conditions, IEnumerable<string> actions)
         {
             this.ConditionSet = conditions.ToList();

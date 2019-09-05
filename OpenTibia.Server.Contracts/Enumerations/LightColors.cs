@@ -1,0 +1,36 @@
+﻿// -----------------------------------------------------------------
+// <copyright file="LightColors.cs" company="2Dudes">
+// Copyright (c) 2018 2Dudes. All rights reserved.
+// Licensed under the MIT license.
+// See LICENSE file in the project root for full license information.
+// </copyright>
+// -----------------------------------------------------------------
+
+namespace OpenTibia.Server.Contracts.Enumerations
+{
+    /// <summary>
+    /// Enumeration of the possible light colors.
+    /// </summary>
+    public enum LightColors : byte
+    {
+        /// <summary>
+        /// No color.
+        /// </summary>
+        None = 0,
+
+        /// <summary>
+        /// The default color, which is <see cref="Orange"/>.
+        /// </summary>
+        Default = Orange,
+
+        /// <summary>
+        /// Orange color.
+        /// </summary>
+        Orange = 206,
+
+        /// <summary>
+        /// White color.
+        /// </summary>
+        White = 215,
+    }
+}

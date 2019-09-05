@@ -8,16 +8,23 @@ namespace OpenTibia.Server.Movement
 {
     using System;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Events;
     using OpenTibia.Server.Movement.EventConditions;
     using OpenTibia.Server.Notifications;
 
-    internal class ThingMovementContainerToContainer : MovementBase
+    internal class ThingMovementContainerToContainer : BaseMovementEvent
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ThingMovementContainerToContainer"/> class.
+        /// </summary>
+        /// <param name="requestorId"></param>
+        /// <param name="thingMoving"></param>
+        /// <param name="fromLocation"></param>
+        /// <param name="toLocation"></param>
+        /// <param name="count"></param>
         public ThingMovementContainerToContainer(uint requestorId, IThing thingMoving, Location fromLocation, Location toLocation, byte count = 1)
             : base(requestorId, EvaluationTime.OnExecute)
         {
@@ -72,16 +79,13 @@ namespace OpenTibia.Server.Movement
 
         private void MoveBetweenContainers()
         {
-            IItem extraItem;
-            var updatedItem = this.Thing as IItem;
-
-            if (this.FromContainer == null || this.ToContainer == null || updatedItem == null || this.Requestor == null)
+            if (this.FromContainer == null || this.ToContainer == null || !(this.Thing is IItem updatedItem) || this.Requestor == null)
             {
                 return;
             }
 
             // attempt to remove from the source container
-            if (!this.FromContainer.RemoveContent(updatedItem.Type.TypeId, this.FromIndex, this.Count, out extraItem))
+            if (!this.FromContainer.RemoveContent(updatedItem.Type.TypeId, this.FromIndex, this.Count, out IItem extraItem))
             {
                 return;
             }
@@ -114,7 +118,7 @@ namespace OpenTibia.Server.Movement
             Game.Instance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, this.Requestor.Location, Game.Instance.GetMapTileDescription(conn.PlayerId, this.Requestor.Location)), this.Requestor.Location);
 
             // and handle collision.
-            if (!this.Requestor.Tile.HandlesCollision)
+            if (!this.Requestor.Tile.HasCollisionEvents)
             {
                 return;
             }

@@ -12,6 +12,7 @@ namespace OpenTibia.Scheduling
     using System.Threading.Tasks;
     using OpenTibia.Common.Helpers;
     using OpenTibia.Scheduling.Contracts;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
     using Priority_Queue;
 
     /// <summary>
@@ -26,9 +27,9 @@ namespace OpenTibia.Scheduling
         private const int MaxQueueNodes = 1000000;
 
         /// <summary>
-        /// The maximum difference in hours that the referenced time can be off on creaation of the <see cref="Scheduler"/> instance.
+        /// The maximum difference time that the referenced time can be off on creaation of the <see cref="Scheduler"/> instance.
         /// </summary>
-        private const int MaximumReferenceTimeDifferenceInHours = 1;
+        private static readonly TimeSpan MaximumReferenceTimeDifference = TimeSpan.FromHours(1);
 
         /// <summary>
         /// The default processing wait time on the processing queue thread.
@@ -38,72 +39,132 @@ namespace OpenTibia.Scheduling
         /// <summary>
         /// The referenced start time.
         /// </summary>
-        private readonly DateTime startTime;
+        private readonly DateTimeOffset startTime;
 
         /// <summary>
         /// The internal priority queue used to manage events.
         /// </summary>
-        private FastPriorityQueue<BaseEvent> priorityQueue;
+        private readonly FastPriorityQueue<BaseEvent> priorityQueue;
 
         /// <summary>
         /// Stores the ids of cancelled events.
         /// </summary>
-        private ISet<string> cancelledEvents;
+        private readonly ISet<string> cancelledEvents;
 
         /// <summary>
         /// A dictionary to keep track of who requested which events.
         /// </summary>
-        private IDictionary<uint, ISet<string>> eventsPerRequestor;
-
-        /// <summary>
-        /// A cancellation token to use on the queue processing thread.
-        /// </summary>
-        private CancellationToken cancellationToken;
+        private readonly IDictionary<uint, ISet<string>> eventsPerRequestor;
 
         /// <summary>
         /// A lock object to semaphore queue modifications.
         /// </summary>
-        private object queueLock;
+        private readonly object queueLock;
 
         /// <summary>
         /// A lock object to monitor when new events are added to the queue.
         /// </summary>
-        private object eventsAvailableLock;
+        private readonly object eventsAvailableLock;
 
         /// <summary>
         /// A lock object to semaphore the events per requestor dictionary.
         /// </summary>
-        private object eventsPerRequestorLock;
+        private readonly object eventsPerRequestorLock;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Scheduler"/> class.
         /// </summary>
-        /// <param name="referenceTime">The time to use as reference .</param>
-        public Scheduler(DateTime referenceTime)
+        /// <param name="referenceTime">Optional. The time to use as reference. Defaults to <see cref="DateTimeOffset.UtcNow"/>.</param>
+        public Scheduler(DateTimeOffset? referenceTime = null)
         {
-            referenceTime.ThrowIfDefaultValue(nameof(referenceTime));
+            var startTime = referenceTime ?? DateTimeOffset.UtcNow;
+            var refTimeDifference = DateTimeOffset.UtcNow - startTime;
 
-            var refTimeDifference = (DateTime.Now - referenceTime).TotalHours;
-
-            if (refTimeDifference >= Scheduler.MaximumReferenceTimeDifferenceInHours)
+            if (refTimeDifference >= MaximumReferenceTimeDifference)
             {
-                throw new ArgumentException($"{nameof(referenceTime)} must be within the past hour's time.");
+                throw new ArgumentException($"{nameof(referenceTime)} must be within {MaximumReferenceTimeDifference}.");
             }
 
             this.eventsPerRequestorLock = new object();
             this.eventsAvailableLock = new object();
             this.queueLock = new object();
-            this.startTime = referenceTime;
-            this.priorityQueue = new FastPriorityQueue<BaseEvent>(Scheduler.MaxQueueNodes);
-            this.cancellationToken = new CancellationTokenSource().Token;
+            this.startTime = startTime;
+            this.priorityQueue = new FastPriorityQueue<BaseEvent>(MaxQueueNodes);
             this.cancelledEvents = new HashSet<string>();
             this.eventsPerRequestor = new Dictionary<uint, ISet<string>>();
-
-            Task.Factory.StartNew(this.QueueProcessing, this.cancellationToken);
         }
 
         /// <inheritdoc/>
         public event EventFired OnEventFired;
+
+        /// <summary>
+        /// Processes the queue and fires events.
+        /// </summary>
+        /// <param name="cancellationToken">The token to watch for cancellation.</param>
+        /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+        public async Task RunAsync(CancellationToken cancellationToken)
+        {
+            await Task.Factory.StartNew(() =>
+            {
+                TimeSpan waitForNewTimeOut = TimeSpan.Zero;
+
+                while (!cancellationToken.IsCancellationRequested)
+                {
+                    lock (this.eventsAvailableLock)
+                    {
+                        // wait until we're flagged that there are events available.
+                        Monitor.Wait(this.eventsAvailableLock, waitForNewTimeOut > TimeSpan.Zero ? waitForNewTimeOut : DefaultProcessWaitTime);
+
+                        // reset time to wait.
+                        waitForNewTimeOut = TimeSpan.Zero;
+
+                        lock (this.queueLock)
+                        {
+                            if (this.priorityQueue.First == null)
+                            {
+                                // no more items on the queue, go to wait.
+                                Console.WriteLine($"{nameof(Scheduler)}: Queue empty.");
+                                continue;
+                            }
+
+                            // store a single 'current' time for processing of all items in the queue
+                            // TODO: use 'current' time from Game.Instance
+                            var currentTimeInMilliseconds = this.GetMillisecondsAfterReferenceTime(DateTimeOffset.UtcNow);
+
+                            // check the current queue and fire any events that are due.
+                            while (this.priorityQueue.Count > 0)
+                            {
+                                // the first item always points to the next-in-time event available.
+                                var nextEvent = this.priorityQueue.First;
+
+                                // check if this event has been cancelled.
+                                if (this.cancelledEvents.Contains(nextEvent.EventId))
+                                {
+                                    // dequeue, clean and move next.
+                                    this.priorityQueue.Dequeue();
+                                    this.CleanAllAttributedTo(nextEvent.EventId, nextEvent.RequestorId);
+                                    continue;
+                                }
+
+                                // check if the event is due
+                                if (nextEvent.Priority <= currentTimeInMilliseconds)
+                                {
+                                    // actually dequeue this item.
+                                    this.priorityQueue.Dequeue();
+
+                                    this.OnEventFired?.Invoke(this, new EventFiredEventArgs(nextEvent));
+                                    continue;
+                                }
+
+                                // else the next item is in the future, so figure out how long to wait, update and break.
+                                waitForNewTimeOut = TimeSpan.FromMilliseconds(nextEvent.Priority < currentTimeInMilliseconds ? 0 : nextEvent.Priority - currentTimeInMilliseconds);
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         /// <summary>
         /// Cancels all the events attributed to a requestor.
@@ -119,7 +180,7 @@ namespace OpenTibia.Scheduling
                 specificType = typeof(BaseEvent);
             }
 
-            if (specificType as IEvent == null)
+            if (!typeof(IEvent).IsAssignableFrom(specificType))
             {
                 throw new ArgumentException($"Invalid type of event specified. Type must derive from {nameof(IEvent)}.", nameof(specificType));
             }
@@ -164,9 +225,7 @@ namespace OpenTibia.Scheduling
         {
             eventToSchedule.ThrowIfNull(nameof(eventToSchedule));
 
-            var castedEvent = eventToSchedule as BaseEvent;
-
-            if (castedEvent == null)
+            if (!(eventToSchedule is BaseEvent castedEvent))
             {
                 throw new ArgumentException($"Argument must be of type {nameof(BaseEvent)}.", nameof(eventToSchedule));
             }
@@ -193,14 +252,7 @@ namespace OpenTibia.Scheduling
                             this.eventsPerRequestor.Add(castedEvent.RequestorId, new HashSet<string>());
                         }
 
-                        try
-                        {
-                            this.eventsPerRequestor[castedEvent.RequestorId].Add(castedEvent.EventId);
-                        }
-                        catch
-                        {
-                            // ignore clashes, it was our goal to add it anyways.
-                        }
+                        this.eventsPerRequestor[castedEvent.RequestorId].Add(castedEvent.EventId);
                     }
                 }
 
@@ -209,18 +261,14 @@ namespace OpenTibia.Scheduling
         }
 
         /// <inheritdoc/>
-        public void ScheduleEvent(IEvent eventToSchedule, DateTime runAt)
+        public void ScheduleEvent(IEvent eventToSchedule, DateTimeOffset runAt)
         {
             eventToSchedule.ThrowIfNull(nameof(eventToSchedule));
 
-            var castedEvent = eventToSchedule as BaseEvent;
-
-            if (castedEvent == null)
+            if (!(eventToSchedule is BaseEvent castedEvent))
             {
                 throw new ArgumentException($"Argument must be of type {nameof(BaseEvent)}.", nameof(eventToSchedule));
             }
-
-            runAt.ThrowIfDefaultValue(nameof(runAt));
 
             if (runAt < this.startTime)
             {
@@ -249,14 +297,7 @@ namespace OpenTibia.Scheduling
                             this.eventsPerRequestor.Add(castedEvent.RequestorId, new HashSet<string>());
                         }
 
-                        try
-                        {
-                            this.eventsPerRequestor[castedEvent.RequestorId].Add(castedEvent.EventId);
-                        }
-                        catch
-                        {
-                            // ignore clashes, it was our goal to add it anyways.
-                        }
+                        this.eventsPerRequestor[castedEvent.RequestorId].Add(castedEvent.EventId);
                     }
                 }
 
@@ -269,73 +310,9 @@ namespace OpenTibia.Scheduling
         /// </summary>
         /// <param name="dateTime">The specified time.</param>
         /// <returns>The milliseconds value.</returns>
-        private long GetMillisecondsAfterReferenceTime(DateTime dateTime)
+        private long GetMillisecondsAfterReferenceTime(DateTimeOffset dateTime)
         {
             return Convert.ToInt64((dateTime - this.startTime).TotalMilliseconds);
-        }
-
-        /// <summary>
-        /// Processes the queue and fires events.
-        /// </summary>
-        private void QueueProcessing()
-        {
-            TimeSpan waitForNewTimeOut = TimeSpan.Zero;
-
-            while (!this.cancellationToken.IsCancellationRequested)
-            {
-                lock (this.eventsAvailableLock)
-                {
-                    // wait until we're flagged that there are events available.
-                    Monitor.Wait(this.eventsAvailableLock, waitForNewTimeOut > TimeSpan.Zero ? waitForNewTimeOut : Scheduler.DefaultProcessWaitTime);
-
-                    // reset time to wait.
-                    waitForNewTimeOut = TimeSpan.Zero;
-
-                    lock (this.queueLock)
-                    {
-                        if (this.priorityQueue.First == null)
-                        {
-                            // no more items on the queue, go to wait.
-                            Console.WriteLine($"{nameof(Scheduler)}: Queue empty.");
-                            continue;
-                        }
-
-                        // store a single 'current' time for processing of all items in the queue
-                        // TODO: use 'current' time from Game.Instance
-                        var currentTimeInMilliseconds = this.GetMillisecondsAfterReferenceTime(DateTime.Now);
-
-                        // check the current queue and fire any events that are due.
-                        while (this.priorityQueue.Count > 0)
-                        {
-                            // the first item always points to the next-in-time event available.
-                            var nextEvent = this.priorityQueue.First;
-
-                            // check if this event has been cancelled.
-                            if (this.cancelledEvents.Contains(nextEvent.EventId))
-                            {
-                                // dequeue, clean and move next.
-                                this.priorityQueue.Dequeue();
-                                this.CleanAllAttributedTo(nextEvent.EventId, nextEvent.RequestorId);
-                                continue;
-                            }
-
-                            // check if the event is due
-                            if (nextEvent.Priority <= currentTimeInMilliseconds)
-                            {
-                                // actually dequeue this item.
-                                this.priorityQueue.Dequeue();
-
-                                this.OnEventFired?.Invoke(this, new EventFiredEventArgs(nextEvent));
-                                continue;
-                            }
-
-                            // else the next item is in the future, so figure out how long to wait, update and break.
-                            waitForNewTimeOut = TimeSpan.FromMilliseconds(nextEvent.Priority < currentTimeInMilliseconds ? 0 : nextEvent.Priority - currentTimeInMilliseconds);
-                            break;
-                        }
-                    }
-                }
-            }
         }
 
         /// <summary>

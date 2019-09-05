@@ -14,36 +14,36 @@ namespace OpenTibia.Data.Models
     public class PlayerModel : ICipPlayer
     {
         [Key]
-        public short Player_Id { get; set; }
+        public short Player_Id { get; }
 
-        public string Charname { get; set; }
+        public string Charname { get; }
 
-        public int Account_Id { get; set; }
+        public int Account_Id { get; }
 
-        public int Account_Nr { get; set; }
+        public int Account_Nr { get; }
 
-        public int Creation { get; set; }
+        public int Creation { get; }
 
-        public int Lastlogin { get; set; }
+        public int Lastlogin { get; }
 
-        public byte Gender { get; set; }
+        public byte Gender { get; }
 
-        public byte Online { get; set; }
+        public byte Online { get; }
 
-        public string Vocation { get; set; }
+        public string Vocation { get; }
 
-        public byte Hideprofile { get; set; }
+        public byte Hideprofile { get; }
 
-        public int Playerdelete { get; set; }
+        public int Playerdelete { get; }
 
-        public short Level { get; set; }
+        public short Level { get; }
 
-        public string Residence { get; set; }
+        public string Residence { get; }
 
-        public string Oldname { get; set; }
+        public string Oldname { get; }
 
-        public string Comment { get; set; }
+        public string Comment { get; }
 
-        public string CharIp { get; set; }
+        public string CharIp { get; }
     }
 }

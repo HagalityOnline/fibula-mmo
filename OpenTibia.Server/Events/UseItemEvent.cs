@@ -9,12 +9,17 @@ namespace OpenTibia.Server.Events
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
+    using OpenTibia.Server.Contracts.Enumerations;
 
     internal class UseItemEvent : BaseItemEvent
     {
         public ushort ItemToUseId { get; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="UseItemEvent"/> class.
+        /// </summary>
+        /// <param name="conditionSet"></param>
+        /// <param name="actionSet"></param>
         public UseItemEvent(IList<string> conditionSet, IList<string> actionSet)
             : base(conditionSet, actionSet)
         {

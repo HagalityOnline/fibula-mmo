@@ -11,8 +11,9 @@ namespace OpenTibia.Server.Monsters
     using System.IO;
     using System.Linq;
     using System.Reflection;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Items;
 
     public class MonFilesMonsterLoader : IMonsterLoader
@@ -83,18 +84,15 @@ namespace OpenTibia.Server.Monsters
         public const char CommentSymbol = '#';
         public const char PropertyValueSeparator = '=';
 
-        Dictionary<ushort, MonsterType> IMonsterLoader.LoadMonsters(string loadFromFile)
+        Dictionary<ushort, IMonsterType> IMonsterLoader.LoadMonsters(string loadFromFile)
         {
-            if (string.IsNullOrWhiteSpace(loadFromFile))
-            {
-                throw new ArgumentNullException(nameof(loadFromFile));
-            }
+            loadFromFile.ThrowIfNullOrWhiteSpace(nameof(loadFromFile));
 
             var monsFilePattern = "OpenTibia.Server.Data." + ServerConfiguration.MonsterFilesDirectory;
 
             var assembly = Assembly.GetExecutingAssembly();
 
-            var monsterDictionary = new Dictionary<ushort, MonsterType>();
+            var monsterDictionary = new Dictionary<ushort, IMonsterType>();
             var monsterFilePaths = assembly.GetManifestResourceNames().Where(s => s.Contains(monsFilePattern));
 
             foreach (var monsterFilePath in monsterFilePaths)
@@ -237,10 +235,7 @@ namespace OpenTibia.Server.Monsters
         /// <returns></returns>
         public IEnumerable<Spawn> LoadSpawns(string spawnsFileName)
         {
-            if (string.IsNullOrWhiteSpace(spawnsFileName))
-            {
-                throw new ArgumentNullException(nameof(spawnsFileName));
-            }
+            spawnsFileName.ThrowIfNullOrWhiteSpace(nameof(spawnsFileName));
 
             var spawns = new List<Spawn>();
             var spawnsFilePath = "OpenTibia.Server.Data." + ServerConfiguration.DataFilesDirectory + "." + spawnsFileName;
@@ -279,7 +274,7 @@ namespace OpenTibia.Server.Monsters
                         {
                             X = Convert.ToInt32(data[1]),
                             Y = Convert.ToInt32(data[2]),
-                            Z = Convert.ToSByte(data[3])
+                            Z = Convert.ToSByte(data[3]),
                         };
                         var radius = Convert.ToUInt16(data[4]);
                         var monCount = Convert.ToByte(data[5]);
@@ -291,7 +286,7 @@ namespace OpenTibia.Server.Monsters
                             Location = loc,
                             Radius = radius,
                             Count = monCount,
-                            Regen = regen
+                            Regen = regen,
                         });
                     }
                 }

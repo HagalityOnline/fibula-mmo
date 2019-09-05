@@ -8,12 +8,17 @@ namespace OpenTibia.Server
 {
     using System;
     using OpenTibia.Common.Helpers;
-    using OpenTibia.Scheduling.Contracts;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
 
     internal class GenericEventCondition : IEventCondition
     {
-        private Func<bool> condition;
+        private readonly Func<bool> condition;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="GenericEventCondition"/> class.
+        /// </summary>
+        /// <param name="condition"></param>
+        /// <param name="errorMsg"></param>
         public GenericEventCondition(Func<bool> condition, string errorMsg = "")
         {
             condition.ThrowIfNull();

@@ -14,30 +14,30 @@ namespace OpenTibia.Data.Models
     public class Highscore : IHighscore
     {
         [Key]
-        public int AccountId { get; set; }
+        public int AccountId { get; }
 
-        public string Charname { get; set; }
+        public string Charname { get; }
 
-        public string Vocation { get; set; }
+        public string Vocation { get; }
 
-        public int Level { get; set; }
+        public int Level { get; }
 
-        public byte Exp { get; set; }
+        public byte Exp { get; }
 
-        public byte Mlvl { get; set; }
+        public byte Mlvl { get; }
 
-        public byte SkillShield { get; set; }
+        public byte SkillShield { get; }
 
-        public byte SkillDist { get; set; }
+        public byte SkillDist { get; }
 
-        public byte SkillAxe { get; set; }
+        public byte SkillAxe { get; }
 
-        public byte SkillSword { get; set; }
+        public byte SkillSword { get; }
 
-        public byte SkillClub { get; set; }
+        public byte SkillClub { get; }
 
-        public byte SkillFist { get; set; }
+        public byte SkillFist { get; }
 
-        public byte SkillFish { get; set; }
+        public byte SkillFish { get; }
     }
 }

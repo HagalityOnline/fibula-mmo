@@ -9,12 +9,17 @@ namespace OpenTibia.Server.Events
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
+    using OpenTibia.Server.Contracts.Enumerations;
 
     internal class SeparationItemEvent : BaseItemEvent
     {
         public ushort ThingIdOfSeparation { get; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SeparationItemEvent"/> class.
+        /// </summary>
+        /// <param name="conditionSet"></param>
+        /// <param name="actionSet"></param>
         public SeparationItemEvent(IList<string> conditionSet, IList<string> actionSet)
             : base(conditionSet, actionSet)
         {

@@ -6,8 +6,8 @@
 
 namespace OpenTibia.Server.Movement.EventConditions
 {
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Abstractions;
 
     /// <summary>
     /// Class that represents a condition which evaluates if a grabber has enough carry strength in them to pick up a thing.
@@ -48,11 +48,10 @@ namespace OpenTibia.Server.Movement.EventConditions
         /// <inheritdoc/>
         public bool Evaluate()
         {
-            var itemBeingPicked = this.ThingPicking as IItem;
             var itemBeingDropped = this.ThingDropping as IItem;
             var picker = this.PickerId == 0 ? null : Game.Instance.GetCreatureWithId(this.PickerId);
 
-            if (itemBeingPicked == null || picker == null)
+            if (!(this.ThingPicking is IItem itemBeingPicked) || picker == null)
             {
                 return false;
             }

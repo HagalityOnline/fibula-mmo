@@ -7,16 +7,14 @@
 namespace OpenTibia.Server.Scripting
 {
     using System;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Server.Contracts.Structs;
 
     internal class LocationConverter : IConverter
     {
         public object Convert(string value)
         {
-            if (string.IsNullOrWhiteSpace(value))
-            {
-                throw new ArgumentNullException(nameof(value));
-            }
+            value.ThrowIfNullOrWhiteSpace(nameof(value));
 
             var coordsArray = value.TrimStart('[').TrimEnd(']').Split(',');
 
@@ -29,7 +27,7 @@ namespace OpenTibia.Server.Scripting
             {
                 X = System.Convert.ToInt32(coordsArray[0]),
                 Y = System.Convert.ToInt32(coordsArray[1]),
-                Z = System.Convert.ToSByte(coordsArray[2])
+                Z = System.Convert.ToSByte(coordsArray[2]),
             };
         }
     }

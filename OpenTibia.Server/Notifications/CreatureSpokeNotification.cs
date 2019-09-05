@@ -7,51 +7,31 @@
 namespace OpenTibia.Server.Notifications
 {
     using System;
-    using OpenTibia.Communications;
+    using OpenTibia.Common.Helpers;
     using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
 
     internal class CreatureSpokeNotification : Notification
     {
-        public ICreature Creature { get; }
-
-        public SpeechType SpeechType { get; }
-
-        public string Message { get; }
-
-        public ChatChannel Channel { get; }
-
-        public CreatureSpokeNotification(Connection connection, ICreature creature, SpeechType speechType, string message, ChatChannel channel = ChatChannel.None)
-            : base(connection)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CreatureSpokeNotification"/> class.
+        /// </summary>
+        /// <param name="arguments">The arguments for this notification.</param>
+        public CreatureSpokeNotification(CreatureSpokeNotificationArguments arguments)
+            : base(audience, playerId)
         {
-            if (creature == null)
-            {
-                throw new ArgumentNullException(nameof(creature));
-            }
+            arguments.ThrowIfNull(nameof(arguments));
 
-            if (string.IsNullOrWhiteSpace(message))
-            {
-                throw new ArgumentNullException(nameof(message));
-            }
-
-            this.Creature = creature;
-            this.SpeechType = speechType;
-            this.Message = message;
-            this.Channel = channel;
+            this.Arguments = arguments;
         }
+
+        /// <summary>
+        /// Gets this notification's arguments.
+        /// </summary>
+        public CreatureSpokeNotificationArguments Arguments { get; }
 
         public override void Prepare()
         {
-            this.ResponsePackets.Add(new CreatureSpeechPacket
-            {
-                ChannelId = this.Channel,
-                SenderName = this.Creature.Name,
-                Location = this.Creature.Location,
-                SpeechType = this.SpeechType,
-                Text = this.Message,
-                Time = (uint)DateTime.Now.Ticks
-            });
+            this.Packets.Add(new CreatureSpeechPacket(this.Arguments.Creature.Name, this.Arguments.SpeechType, this.Arguments.Message, this.Arguments.Creature.Location, this.Arguments.Channel, (uint)DateTimeOffset.UtcNow.Ticks));
         }
     }
 }

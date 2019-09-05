@@ -6,10 +6,10 @@
 
 namespace OpenTibia.Server.Algorithms
 {
-    using System;
     using System.Collections.Generic;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
 
     internal static class TileNodeCache
     {
@@ -18,15 +18,8 @@ namespace OpenTibia.Server.Algorithms
 
         public static TileNode Create(string aStarSearchId, ITile tileBase)
         {
-            if (string.IsNullOrWhiteSpace(aStarSearchId))
-            {
-                throw new ArgumentNullException(nameof(aStarSearchId));
-            }
-
-            if (tileBase == null)
-            {
-                throw new ArgumentNullException(nameof(tileBase));
-            }
+            aStarSearchId.ThrowIfNullOrWhiteSpace(nameof(aStarSearchId));
+            tileBase.ThrowIfNull(nameof(tileBase));
 
             var locToSearch = tileBase.Location;
 

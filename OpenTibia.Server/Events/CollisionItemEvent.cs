@@ -9,12 +9,15 @@ namespace OpenTibia.Server.Events
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
+    using OpenTibia.Server.Contracts.Enumerations;
 
     internal class CollisionItemEvent : BaseItemEvent
     {
-        public ushort ThingIdOfCollision { get; }
-
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CollisionItemEvent"/> class.
+        /// </summary>
+        /// <param name="conditionSet"></param>
+        /// <param name="actionSet"></param>
         public CollisionItemEvent(IList<string> conditionSet, IList<string> actionSet)
             : base(conditionSet, actionSet)
         {
@@ -27,6 +30,8 @@ namespace OpenTibia.Server.Events
 
             this.ThingIdOfCollision = Convert.ToUInt16(isTypeCondition.Parameters[1]);
         }
+
+        public ushort ThingIdOfCollision { get; }
 
         public override ItemEventType Type => ItemEventType.Collision;
     }

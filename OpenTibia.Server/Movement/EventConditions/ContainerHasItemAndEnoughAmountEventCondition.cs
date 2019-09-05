@@ -6,8 +6,8 @@
 
 namespace OpenTibia.Server.Movement.EventConditions
 {
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Abstractions;
 
     /// <summary>
     /// Class that represents a condition which evaluates if a container has at least X amount of a given item.

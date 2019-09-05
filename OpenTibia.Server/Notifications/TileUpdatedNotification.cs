@@ -6,30 +6,31 @@
 
 namespace OpenTibia.Server.Notifications
 {
-    using OpenTibia.Communications;
+    using OpenTibia.Common.Helpers;
     using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Server.Data.Models.Structs;
 
     internal class TileUpdatedNotification : Notification
     {
-        public Location Location { get; }
-
-        public byte[] Description { get; }
-
-        public TileUpdatedNotification(Connection connection, Location location, byte[] description)
-            : base(connection)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TileUpdatedNotification"/> class.
+        /// </summary>
+        /// <param name="arguments">The arguments for this notification.</param>
+        public TileUpdatedNotification(TileUpdatedNotificationArguments arguments)
+            : base(playerId)
         {
-            this.Location = location;
-            this.Description = description;
+            arguments.ThrowIfNull(nameof(arguments));
+
+            this.Arguments = arguments;
         }
+
+        /// <summary>
+        /// Gets this notification's arguments.
+        /// </summary>
+        public TileUpdatedNotificationArguments Arguments { get; }
 
         public override void Prepare()
         {
-            this.ResponsePackets.Add(new UpdateTilePacket
-            {
-                Location = this.Location,
-                DescriptionBytes = this.Description
-            });
+            this.Packets.Add(new UpdateTilePacket(this.Arguments.Location, this.Arguments.Description));
         }
     }
 }

@@ -6,10 +6,9 @@
 
 namespace OpenTibia.Server.Movement.EventConditions
 {
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
 
     /// <summary>
     /// Class that represents an event condition that evaluates whether an item with the unpass flag is being moved within range.
@@ -51,9 +50,8 @@ namespace OpenTibia.Server.Movement.EventConditions
         public bool Evaluate()
         {
             var mover = this.MoverId == 0 ? null : Game.Instance.GetCreatureWithId(this.MoverId);
-            var item = this.Thing as IItem;
 
-            if (item == null || mover == null || !item.Type.Flags.Contains(ItemFlag.Unpass))
+            if (!(this.Thing is IItem item) || mover == null || !item.Type.Flags.Contains(ItemFlag.Unpass))
             {
                 // MoverId being null means this is probably a script's action.
                 // Policy does not apply to this thing.

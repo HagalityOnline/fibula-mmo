@@ -9,9 +9,9 @@ namespace OpenTibia.Server.Algorithms
     using System;
     using System.Collections.Generic;
     using OpenTibia.Common.Helpers;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
-    using OpenTibia.Utilities;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Common.Utilities;
+    using OpenTibia.Server.Contracts.Structs;
 
     internal class TileNode : INode
     {
@@ -78,7 +78,7 @@ namespace OpenTibia.Server.Algorithms
             get
             {
                 // TODO: handle damage types to avoid
-                return this.isInClosedList || this.MovementCost > 0 && !this.Tile.CanBeWalked();
+                return this.isInClosedList || (this.MovementCost > 0 && !this.Tile.CanBeWalked());
             }
 
             set
@@ -87,6 +87,11 @@ namespace OpenTibia.Server.Algorithms
             }
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="TileNode"/> class.
+        /// </summary>
+        /// <param name="searchId"></param>
+        /// <param name="tile"></param>
         public TileNode(string searchId, ITile tile)
         {
             searchId.ThrowIfNullOrWhiteSpace(nameof(searchId));

@@ -36,7 +36,7 @@ namespace OpenTibia.Data.Models
 
         public int Banished { get; set; }
 
-        public int Banished_Until { get; set; }
+        public long Banished_Until { get; set; }
 
         public short Premium_Days { get; set; }
 

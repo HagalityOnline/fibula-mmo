@@ -8,17 +8,24 @@ namespace OpenTibia.Server.Movement
 {
     using System;
     using System.Linq;
-    using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Events;
     using OpenTibia.Server.Movement.EventConditions;
     using OpenTibia.Server.Notifications;
 
-    internal class ThingMovementGroundToSlot : MovementBase
+    internal class ThingMovementGroundToSlot : BaseMovementEvent
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ThingMovementGroundToSlot"/> class.
+        /// </summary>
+        /// <param name="creatureRequestingId"></param>
+        /// <param name="thingMoving"></param>
+        /// <param name="fromLocation"></param>
+        /// <param name="fromStackPos"></param>
+        /// <param name="toLocation"></param>
+        /// <param name="count"></param>
         public ThingMovementGroundToSlot(uint creatureRequestingId, IThing thingMoving, Location fromLocation, byte fromStackPos, Location toLocation, byte count = 1)
             : base(creatureRequestingId, EvaluationTime.OnExecute)
         {
@@ -64,9 +71,7 @@ namespace OpenTibia.Server.Movement
 
         private void MoveFromGroudToSlot()
         {
-            var updatedItem = this.Thing as IItem;
-
-            if (this.FromTile == null || this.Thing == null || updatedItem == null || this.Requestor == null)
+            if (this.FromTile == null || this.Thing == null || !(this.Thing is IItem updatedItem) || this.Requestor == null)
             {
                 return;
             }
@@ -85,7 +90,7 @@ namespace OpenTibia.Server.Movement
             Game.Instance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, this.FromTile.Location, Game.Instance.GetMapTileDescription(conn.PlayerId, this.FromTile.Location)), this.FromTile.Location);
 
             // and call any separation events.
-            if (this.FromTile.HandlesSeparation) // TODO: what happens on separation of less than required quantity, etc?
+            if (this.FromTile.HasSeparationEvents) // TODO: what happens on separation of less than required quantity, etc?
             {
                 foreach (var itemWithSeparation in this.FromTile.ItemsWithSeparation)
                 {
@@ -111,8 +116,7 @@ namespace OpenTibia.Server.Movement
             }
 
             // attempt to place the intended item at the slot.
-            IItem addedItem;
-            if (!this.Requestor.Inventory.Add(updatedItem, out addedItem, this.ToSlot, updatedItem.Count))
+            if (!this.Requestor.Inventory.Add(updatedItem, out IItem addedItem, this.ToSlot, updatedItem.Count))
             {
                 // failed to add to the slot, add again to the source tile
                 this.FromTile.AddThing(ref thing, thing.Count);
@@ -121,7 +125,7 @@ namespace OpenTibia.Server.Movement
                 Game.Instance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, this.FromTile.Location, Game.Instance.GetMapTileDescription(conn.PlayerId, this.FromTile.Location)), this.FromTile.Location);
 
                 // call any collision events again.
-                if (this.FromTile.HandlesCollision)
+                if (this.FromTile.HasCollisionEvents)
                 {
                     foreach (var itemWithCollision in this.FromTile.ItemsWithCollision)
                     {
@@ -151,7 +155,7 @@ namespace OpenTibia.Server.Movement
                 Game.Instance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, this.FromTile.Location, Game.Instance.GetMapTileDescription(conn.PlayerId, this.FromTile.Location)), this.FromTile.Location);
 
                 // call any collision events again.
-                if (!this.FromTile.HandlesCollision)
+                if (!this.FromTile.HasCollisionEvents)
                 {
                     return;
                 }

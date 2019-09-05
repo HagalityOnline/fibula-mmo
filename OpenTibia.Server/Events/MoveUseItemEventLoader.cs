@@ -11,8 +11,9 @@ namespace OpenTibia.Server.Events
     using System.IO;
     using System.Linq;
     using System.Reflection;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
     using OpenTibia.Server.Items;
     using Sprache;
     using static OpenTibia.Server.Parsing.Grammar.EventGrammar;
@@ -20,24 +21,23 @@ namespace OpenTibia.Server.Events
     public class MoveUseItemEventLoader : IItemEventLoader
     {
         /*
-            An item definition starts and ends with blank lines.
+            A move use definition is in the form:
 
-            TypeID      = 1 # body container
-            Name        = ""
-            Flags       = {Container,Take}
-            Attributes  = {Capacity=1,Weight=0
+                Type, ContitionFunctions -> ActionFunctions
+
+            such as:
+
+            Use, IsType (Obj1,2487), IsHouse (Obj1), HasRight (User,PREMIUM_ACCOUNT), MayLogout (User) -> MoveRel(User,Obj1,[0,0,0]), Change(Obj1,2495,0), WriteName(User,"%N",Obj1), ChangeRel(Obj1,[0,1,0],2488,2496,0), Logout(User)
 
          */
 
         public const char CommentSymbol = '#';
+
         public const char PropertyValueSeparator = '=';
 
         public IDictionary<ItemEventType, HashSet<IItemEvent>> Load(string moveUseFileName)
         {
-            if (string.IsNullOrWhiteSpace(moveUseFileName))
-            {
-                throw new ArgumentNullException(nameof(moveUseFileName));
-            }
+            moveUseFileName.ThrowIfNullOrWhiteSpace(nameof(moveUseFileName));
 
             var moveUseFilePath = "OpenTibia.Server.Data." + ServerConfiguration.DataFilesDirectory + "." + moveUseFileName;
 
@@ -49,7 +49,7 @@ namespace OpenTibia.Server.Events
                 { ItemEventType.MultiUse, new HashSet<IItemEvent>() },
                 { ItemEventType.Movement, new HashSet<IItemEvent>() },
                 { ItemEventType.Collision, new HashSet<IItemEvent>() },
-                { ItemEventType.Separation, new HashSet<IItemEvent>() }
+                { ItemEventType.Separation, new HashSet<IItemEvent>() },
             };
 
             using (var stream = assembly.GetManifestResourceStream(moveUseFilePath))
@@ -75,7 +75,7 @@ namespace OpenTibia.Server.Events
                         {
                             var moveUseEventParsed = Event.Parse(inLine);
 
-                            eventDictionary[moveUseEventParsed.Type].Add(ItemEventFactory.Create(moveUseEventParsed));
+                            eventDictionary[moveUseEventParsed.Type].Add(this.ItemEventFactory.Create(moveUseEventParsed));
                         }
                         catch (Exception ex)
                         {

@@ -10,16 +10,18 @@ namespace OpenTibia.Server.Parsing.Grammar
     using System.Linq;
     using Sprache;
 
-    public class CipGrammar
+    public static class CipGrammar
     {
-        private static readonly Parser<char> EqualSign = Parse.Char('=');
-        private static readonly Parser<char> DoubleQuote = Parse.Char('"');
-        private static readonly Parser<char> Backslash = Parse.Char('\\');
-        private static readonly Parser<char> OpenParenthesis = Parse.Char('(');
-        private static readonly Parser<char> CloseParenthesis = Parse.Char(')');
-        private static readonly Parser<char> OpenBracket = Parse.Char('[');
-        private static readonly Parser<char> CloseBracket = Parse.Char(']');
-        private static readonly Parser<char> Comma = Parse.Char(',');
+        public static readonly Parser<char> EqualSign = Parse.Char('=');
+        public static readonly Parser<char> DoubleQuote = Parse.Char('"');
+        public static readonly Parser<char> Backslash = Parse.Char('\\');
+        public static readonly Parser<char> OpenParenthesis = Parse.Char('(');
+        public static readonly Parser<char> CloseParenthesis = Parse.Char(')');
+        public static readonly Parser<char> OpenBracket = Parse.Char('[');
+        public static readonly Parser<char> CloseBracket = Parse.Char(']');
+        public static readonly Parser<char> OpenCurly = Parse.Char('{');
+        public static readonly Parser<char> CloseCurly = Parse.Char('}');
+        public static readonly Parser<char> Comma = Parse.Char(',');
 
         private static readonly Parser<IEnumerable<char>> ConditionsActionsSeparator = Parse.String("->");
 

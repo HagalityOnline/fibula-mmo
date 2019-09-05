@@ -8,61 +8,50 @@ namespace OpenTibia.Server.Notifications
 {
     using System;
     using System.Collections.Generic;
-    using System.Linq;
-    using OpenTibia.Communications;
-    using OpenTibia.Communications.Interfaces;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Communications.Contracts.Abstractions;
     using OpenTibia.Scheduling;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Scheduling.Contracts.Enumerations;
 
-    public abstract class Notification : BaseEvent, INotification
+    /// <summary>
+    /// Abstract class that represents a notification to a player's connection.
+    /// Notifications are basically any message that the server sends to the client of a specific player.
+    /// </summary>
+    internal abstract class Notification : BaseEvent, INotification
     {
-        public Connection Connection { get; }
-
-        public IList<IPacketOutgoing> ResponsePackets { get; protected set; }
-
-        public Notification(Connection connection)
-            : base(connection?.PlayerId ?? 0, EvaluationTime.OnSchedule)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Notification"/> class.
+        /// </summary>
+        /// <param name="determineTargetConnectionsFunction">A function to determine the target connections of this notification.</param>
+        protected Notification(Func<IEnumerable<IConnection>> determineTargetConnectionsFunction)
+            : base(EvaluationTime.OnSchedule)
         {
-            this.Connection = connection ?? throw new ArgumentNullException(nameof(connection));
-            this.ResponsePackets = new List<IPacketOutgoing>();
+            determineTargetConnectionsFunction.ThrowIfNull(nameof(determineTargetConnectionsFunction));
 
+            this.Packets = new List<IOutgoingPacket>();
             this.ActionsOnPass.Add(new GenericEventAction(this.Send));
+
+            this.TargetConnectionsFunction = determineTargetConnectionsFunction;
         }
 
-        public Notification(Connection connection, params IPacketOutgoing[] packets)
-            : this(connection)
-        {
-            foreach (var packet in packets)
-            {
-                this.ResponsePackets.Add(packet);
-            }
-        }
+        /// <summary>
+        /// Gets or sets the packets that must be send as part of this notification.
+        /// </summary>
+        public IList<IOutgoingPacket> Packets { get; protected set; }
 
+        /// <summary>
+        /// Gets the function for determining target connections for this notification.
+        /// </summary>
+        protected Func<IEnumerable<IConnection>> TargetConnectionsFunction { get; }
+
+        /// <summary>
+        /// Finalizes the notification in preparation to it being sent.
+        /// </summary>
         public abstract void Prepare();
 
-        public void Send()
-        {
-            if (!this.ResponsePackets.Any())
-            {
-                return;
-            }
-
-            var networkMessage = new NetworkMessage(4);
-
-            foreach (var packet in this.ResponsePackets)
-            {
-                networkMessage.AddPacket(packet);
-            }
-
-            this.Connection.Send(networkMessage);
-            Console.WriteLine($"Sent {this.GetType().Name} [{this.EventId}] to {this.Connection.PlayerId}");
-
-            // foreach (var packet in ResponsePackets)
-            // {
-            //    packet.CleanUp();
-            // }
-        }
+        /// <summary>
+        /// Sends the notification using the supplied connection.
+        /// </summary>
+        protected abstract void Send();
     }
 }

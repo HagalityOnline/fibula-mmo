@@ -8,16 +8,23 @@ namespace OpenTibia.Server.Movement
 {
     using System;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Events;
     using OpenTibia.Server.Movement.EventConditions;
     using OpenTibia.Server.Notifications;
 
-    internal class ThingMovementSlotToSlot : MovementBase
+    internal class ThingMovementSlotToSlot : BaseMovementEvent
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ThingMovementSlotToSlot"/> class.
+        /// </summary>
+        /// <param name="requestorId"></param>
+        /// <param name="thingMoving"></param>
+        /// <param name="fromLocation"></param>
+        /// <param name="toLocation"></param>
+        /// <param name="count"></param>
         public ThingMovementSlotToSlot(uint requestorId, IThing thingMoving, Location fromLocation, Location toLocation, byte count = 1)
             : base(requestorId, EvaluationTime.OnExecute)
         {
@@ -60,10 +67,8 @@ namespace OpenTibia.Server.Movement
                 return;
             }
 
-            bool partialRemove;
-
             // attempt to remove the item from the inventory
-            var movingItem = this.Requestor.Inventory?.Remove(this.FromSlot, this.Count, out partialRemove);
+            var movingItem = this.Requestor.Inventory?.Remove(this.FromSlot, this.Count, out bool partialRemove);
 
             if (movingItem == null)
             {
@@ -71,8 +76,7 @@ namespace OpenTibia.Server.Movement
             }
 
             // attempt to place the intended item at the slot.
-            IItem addedItem;
-            if (!this.Requestor.Inventory.Add(movingItem, out addedItem, this.ToSlot, movingItem.Count))
+            if (!this.Requestor.Inventory.Add(movingItem, out IItem addedItem, this.ToSlot, movingItem.Count))
             {
                 // failed to add to the slot, add again to the source slot
                 if (!this.Requestor.Inventory.Add(movingItem, out addedItem, this.FromSlot, movingItem.Count))
@@ -86,7 +90,7 @@ namespace OpenTibia.Server.Movement
                     Game.Instance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, this.Requestor.Location, Game.Instance.GetMapTileDescription(conn.PlayerId, this.Requestor.Location)), this.Requestor.Location);
 
                     // call any collision events again.
-                    if (this.Requestor.Tile.HandlesCollision)
+                    if (this.Requestor.Tile.HasCollisionEvents)
                     {
                         foreach (var itemWithCollision in this.Requestor.Tile.ItemsWithCollision)
                         {
@@ -111,8 +115,7 @@ namespace OpenTibia.Server.Movement
                 }
 
                 // added the new item to the slot
-                IItem extraAddedItem;
-                if (!this.Requestor.Inventory.Add(addedItem, out extraAddedItem, this.FromSlot, movingItem.Count))
+                if (!this.Requestor.Inventory.Add(addedItem, out IItem extraAddedItem, this.FromSlot, movingItem.Count))
                 {
                     // we exchanged or got some leftover item, place back in the source container at any index.
                     IThing remainderThing = extraAddedItem;
@@ -123,7 +126,7 @@ namespace OpenTibia.Server.Movement
                     Game.Instance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, this.Requestor.Tile.Location, Game.Instance.GetMapTileDescription(conn.PlayerId, this.Requestor.Location)), this.Requestor.Location);
 
                     // call any collision events again.
-                    if (!this.Requestor.Tile.HandlesCollision)
+                    if (!this.Requestor.Tile.HasCollisionEvents)
                     {
                         return;
                     }

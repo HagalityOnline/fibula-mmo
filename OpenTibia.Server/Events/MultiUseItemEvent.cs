@@ -9,15 +9,16 @@ namespace OpenTibia.Server.Events
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
 
     internal class MultiUseItemEvent : BaseItemEvent
     {
-        public ushort ItemToUseId { get; }
-
-        public ushort ItemToUseOnId { get; }
-
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MultiUseItemEvent"/> class.
+        /// </summary>
+        /// <param name="conditionSet"></param>
+        /// <param name="actionSet"></param>
         public MultiUseItemEvent(IList<string> conditionSet, IList<string> actionSet)
             : base(conditionSet, actionSet)
         {
@@ -41,6 +42,10 @@ namespace OpenTibia.Server.Events
             this.ItemToUseId = Convert.ToUInt16(firstTypeCondition.Parameters[1]);
             this.ItemToUseOnId = Convert.ToUInt16(secondTypeCondition.Parameters[1]);
         }
+
+        public ushort ItemToUseId { get; }
+
+        public ushort ItemToUseOnId { get; }
 
         public override ItemEventType Type => ItemEventType.MultiUse;
     }

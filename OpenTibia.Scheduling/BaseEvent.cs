@@ -9,7 +9,8 @@ namespace OpenTibia.Scheduling
     using System;
     using System.Collections.Generic;
     using System.Diagnostics;
-    using OpenTibia.Scheduling.Contracts;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Scheduling.Contracts.Enumerations;
     using Priority_Queue;
 
     /// <summary>
@@ -43,40 +44,45 @@ namespace OpenTibia.Scheduling
             this.RequestorId = requestorId;
         }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Gets a unique identifier for this event.
+        /// </summary>
         public string EventId { get; }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Gets the id of the requestor of this event, if available.
+        /// </summary>
         public uint RequestorId { get; }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Gets or sets the error message that should be bubbled back to the player if the event cannot be executed.
+        /// </summary>
         public string ErrorMessage { get; protected set; }
 
-        /// <inheritdoc/>
+        /// <summary>
+        /// Gets a <see cref="EvaluationTime"/> value indicating when this event should be evaluated.
+        /// </summary>
         public EvaluationTime EvaluateAt { get; }
 
-        public bool Force { get; protected set; }
-
-        /// <inheritdoc/>
+        /// <summary>
+        /// Gets a value indicating whether the event can be executed.
+        /// </summary>
         public bool CanBeExecuted
         {
             get
             {
                 var allPassed = true;
 
-                if (!this.Force)
+                foreach (var policy in this.Conditions)
                 {
-                    foreach (var policy in this.Conditions)
-                    {
-                        allPassed &= policy.Evaluate();
+                    allPassed &= policy.Evaluate();
 
-                        if (!allPassed)
-                        {
-                            // TODO: proper logging.
-                            Console.WriteLine($"Failed event condition {policy.GetType().Name}.");
-                            this.ErrorMessage = policy.ErrorMessage;
-                            break;
-                        }
+                    if (!allPassed)
+                    {
+                        // TODO: proper logging.
+                        Console.WriteLine($"Failed event condition {policy.GetType().Name}.");
+                        this.ErrorMessage = policy.ErrorMessage;
+                        break;
                     }
                 }
 

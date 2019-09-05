@@ -6,19 +6,17 @@
 
 namespace OpenTibia.Server.Events
 {
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Server.Contracts.Abstractions;
 
     internal class ItemEventFunctionComparison : IItemEventFunction
     {
-        public string FunctionName { get; }
-
-        public object[] Parameters { get; }
-
-        public FunctionComparisonType Type { get; }
-
-        public string CompareToIdentifier { get; }
-
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ItemEventFunctionComparison"/> class.
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="type"></param>
+        /// <param name="compareIdentifier"></param>
+        /// <param name="parameters"></param>
         public ItemEventFunctionComparison(string name, FunctionComparisonType type, string compareIdentifier, object[] parameters)
         {
             this.FunctionName = name;
@@ -26,5 +24,13 @@ namespace OpenTibia.Server.Events
             this.CompareToIdentifier = compareIdentifier;
             this.Parameters = parameters;
         }
+
+        public string FunctionName { get; }
+
+        public object[] Parameters { get; }
+
+        public FunctionComparisonType Type { get; }
+
+        public string CompareToIdentifier { get; }
     }
 }

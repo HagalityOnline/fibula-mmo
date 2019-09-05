@@ -7,16 +7,26 @@
 namespace OpenTibia.Server.Combat
 {
     using System;
-    using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
     using OpenTibia.Server.Notifications;
 
     internal abstract class BaseAttackOperation : ICombatOperation
     {
-        public ICombatActor Attacker { get; }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="BaseAttackOperation"/> class.
+        /// </summary>
+        /// <param name="hunter"></param>
+        /// <param name="prey"></param>
+        protected BaseAttackOperation(ICombatant hunter, ICombatant prey)
+        {
+            this.Attacker = hunter;
+            this.Target = prey;
+        }
 
-        public ICombatActor Target { get; }
+        public ICombatant Attacker { get; }
+
+        public ICombatant Target { get; }
 
         public abstract AttackType AttackType { get; }
 
@@ -26,39 +36,28 @@ namespace OpenTibia.Server.Combat
 
         public abstract int MaximumDamage { get; }
 
-        public virtual bool CanBeExecuted => (this.Attacker as ICreature)?.CalculateRemainingCooldownTime(CooldownType.Combat, Game.Instance.CombatSynchronizationTime) == TimeSpan.Zero;
-
-        protected BaseAttackOperation(ICombatActor hunter, ICombatActor prey)
-        {
-            this.Attacker = hunter;
-            this.Target = prey;
-        }
+        public virtual bool CanBeExecuted => (this.Attacker as ICreature)?.CalculateRemainingCooldownTime(ExhaustionType.Combat, Game.Instance.CombatSynchronizationTime) == TimeSpan.Zero;
 
         public void Execute()
         {
-            EffectT resultEffect;
-            bool wasShielded;
-            bool wasArmorBlocked;
-            TextColor textColor;
-
-            var inflicted = this.InternalExecute(out resultEffect, out wasShielded, out wasArmorBlocked, out textColor);
+            var inflicted = this.InternalExecute(out AnimatedEffect resultEffect, out bool wasShielded, out bool wasArmorBlocked, out TextColor textColor);
 
             AnimatedTextPacket animTextPacket = null;
             var effectPacket = new MagicEffectPacket
             {
                 Effect = resultEffect,
-                Location = this.Target.Location
+                Location = this.Target.Location,
             };
 
             if (inflicted == 0)
             {
                 if (wasArmorBlocked)
                 {
-                    effectPacket.Effect = EffectT.SparkYellow;
+                    effectPacket.Effect = AnimatedEffect.SparkYellow;
                 }
                 else if (wasShielded)
                 {
-                    effectPacket.Effect = EffectT.Puff;
+                    effectPacket.Effect = AnimatedEffect.Puff;
                 }
             }
             else if (inflicted > 0)
@@ -67,13 +66,13 @@ namespace OpenTibia.Server.Combat
                 {
                     Text = inflicted.ToString(),
                     Location = this.Target.Location,
-                    Color = textColor
+                    Color = textColor,
                 };
 
                 if (wasShielded) // magic shield
                 {
                     animTextPacket.Color = TextColor.Blue;
-                    effectPacket.Effect = EffectT.RingsBlue;
+                    effectPacket.Effect = AnimatedEffect.RingsBlue;
                 }
                 else
                 {
@@ -100,10 +99,10 @@ namespace OpenTibia.Server.Combat
                 {
                     Text = inflicted.ToString(),
                     Location = this.Target.Location,
-                    Color = TextColor.LightBlue
+                    Color = TextColor.LightBlue,
                 };
 
-                effectPacket.Effect = EffectT.GlitterBlue;
+                effectPacket.Effect = AnimatedEffect.GlitterBlue;
             }
 
             if (animTextPacket == null)
@@ -118,6 +117,6 @@ namespace OpenTibia.Server.Combat
             this.Attacker.UpdateLastAttack(this.ExhaustionCost);
         }
 
-        protected abstract int InternalExecute(out EffectT resultingEffect, out bool shielded, out bool armored, out TextColor colorText);
+        protected abstract int InternalExecute(out AnimatedEffect resultingEffect, out bool shielded, out bool armored, out TextColor colorText);
     }
 }

@@ -10,6 +10,10 @@ namespace OpenTibia.Server.Parsing
 
     public class CipElement
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CipElement"/> class.
+        /// </summary>
+        /// <param name="data"></param>
         public CipElement(int data)
         {
             this.Data = data;

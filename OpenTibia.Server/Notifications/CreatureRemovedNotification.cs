@@ -6,55 +6,46 @@
 
 namespace OpenTibia.Server.Notifications
 {
-    using System;
-    using OpenTibia.Communications;
+    using OpenTibia.Common.Helpers;
     using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Data.Contracts.Enumerations;
 
-    internal class CreatureRemovedNotification : Notification
+    internal class CreatureRemovedNotification : ProximityNotification
     {
-        public EffectT RemoveEffect { get; }
-
-        public byte OldStackPosition { get; }
-
-        public ICreature Creature { get; }
-
-        public CreatureRemovedNotification(Connection connection, ICreature creature, byte oldStackPos, EffectT removeEffect = EffectT.None)
-            : base(connection)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CreatureRemovedNotification"/> class.
+        /// </summary>
+        /// <param name="arguments">The arguments for this notification.</param>
+        public CreatureRemovedNotification(CreatureRemovedNotificationArguments arguments)
+            : base(audience, playerId)
         {
-            if (creature == null)
-            {
-                throw new ArgumentNullException(nameof(creature));
-            }
+            arguments.ThrowIfNull(nameof(arguments));
 
-            this.Creature = creature;
-            this.OldStackPosition = oldStackPos;
-            this.RemoveEffect = removeEffect;
+            this.Arguments = arguments;
         }
 
+        /// <summary>
+        /// Gets this notification's arguments.
+        /// </summary>
+        public CreatureRemovedNotificationArguments Arguments { get; }
+
+        /// <summary>
+        /// Finalizes the notification in preparation to it being sent.
+        /// </summary>
         public override void Prepare()
         {
-            var player = Game.Instance.GetCreatureWithId(this.Connection.PlayerId);
+            var player = Game.Instance.GetCreatureWithId(this.PlayerId);
 
-            if (player == null || !player.CanSee(this.Creature) || !player.CanSee(this.Creature.Location))
+            if (player == null || !player.CanSee(this.Arguments.Creature) || !player.CanSee(this.Arguments.Creature.Location))
             {
                 return;
             }
 
-            this.ResponsePackets.Add(new RemoveAtStackposPacket
-            {
-                Location = this.Creature.Location,
-                Stackpos = this.OldStackPosition
-            });
+            this.Packets.Add(new RemoveAtStackposPacket(this.Arguments.Creature.Location, this.Arguments.OldStackPosition));
 
-            if (this.RemoveEffect != EffectT.None)
+            if (this.Arguments.RemoveEffect != AnimatedEffect.None)
             {
-                this.ResponsePackets.Add(new MagicEffectPacket
-                {
-                    Location = this.Creature.Location,
-                    Effect = EffectT.Puff
-                });
+                this.Packets.Add(new MagicEffectPacket(this.Arguments.Creature.Location, AnimatedEffect.Puff));
             }
         }
     }

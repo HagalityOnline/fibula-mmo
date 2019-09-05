@@ -6,45 +6,37 @@
 
 namespace OpenTibia.Server.Notifications
 {
-    using System;
-    using OpenTibia.Communications;
+    using OpenTibia.Common.Helpers;
     using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Data.Contracts.Enumerations;
 
     internal class CreatureTurnedNotification : Notification
     {
-        public ICreature Creature { get; }
-
-        public EffectT TurnedEffect { get; }
-
-        public CreatureTurnedNotification(Connection connection, ICreature creature, EffectT turnEffect = EffectT.None)
-            : base(connection)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CreatureTurnedNotification"/> class.
+        /// </summary>
+        /// <param name="arguments">The arguments for this notification.</param>
+        public CreatureTurnedNotification(CreatureTurnedNotificationArguments arguments)
+            : base(audience, playerId)
         {
-            if (creature == null)
-            {
-                throw new ArgumentNullException(nameof(creature));
-            }
+            arguments.ThrowIfNull(nameof(arguments));
 
-            this.Creature = creature;
-            this.TurnedEffect = turnEffect;
+            this.Arguments = arguments;
         }
+
+        /// <summary>
+        /// Gets this notification's arguments.
+        /// </summary>
+        public CreatureTurnedNotificationArguments Arguments { get; }
 
         public override void Prepare()
         {
-            if (this.TurnedEffect != EffectT.None)
+            if (this.Arguments.TurnedEffect != AnimatedEffect.None)
             {
-                this.ResponsePackets.Add(new MagicEffectPacket
-                {
-                    Effect = this.TurnedEffect,
-                    Location = this.Creature.Location
-                });
+                this.Packets.Add(new MagicEffectPacket(this.Arguments.Creature.Location, this.Arguments.TurnedEffect));
             }
 
-            this.ResponsePackets.Add(new CreatureTurnedPacket
-            {
-                Creature = this.Creature
-            });
+            this.Packets.Add(new CreatureTurnedPacket(this.Arguments.Creature));
         }
     }
 }

@@ -7,12 +7,17 @@
 namespace OpenTibia.Server.Combat
 {
     using System;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
 
     internal class StandardAttackOperation : BaseAttackOperation
     {
-        public StandardAttackOperation(ICombatActor hunter, ICombatActor prey)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="StandardAttackOperation"/> class.
+        /// </summary>
+        /// <param name="hunter"></param>
+        /// <param name="prey"></param>
+        public StandardAttackOperation(ICombatant hunter, ICombatant prey)
             : base(hunter, prey)
         {
         }
@@ -52,9 +57,9 @@ namespace OpenTibia.Server.Combat
             }
         }
 
-        protected override int InternalExecute(out EffectT resultingEffect, out bool shielded, out bool armored, out TextColor colorText)
+        protected override int InternalExecute(out AnimatedEffect resultingEffect, out bool shielded, out bool armored, out TextColor colorText)
         {
-            resultingEffect = EffectT.XBlood;
+            resultingEffect = AnimatedEffect.XBlood;
             colorText = TextColor.Red;
             shielded = false;
             armored = false;

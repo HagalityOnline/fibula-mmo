@@ -6,10 +6,28 @@
 
 namespace OpenTibia.Security
 {
-    internal interface IDoSDefender
+    /// <summary>
+    /// Interface for a DoS defender service.
+    /// </summary>
+    public interface IDoSDefender
     {
-        void AddToBlocked(string addessStr);
+        /// <summary>
+        /// Blocks a given address.
+        /// </summary>
+        /// <param name="addessStr">The address to block.</param>
+        void BlockAddress(string addessStr);
 
-        bool IsBlockedAddress(string addressStr);
+        /// <summary>
+        /// Checks if a given address is blocked.
+        /// </summary>
+        /// <param name="addressStr">The address to check for.</param>
+        /// <returns>True if the address is blocked, false otherwise.</returns>
+        bool IsBlocked(string addressStr);
+
+        /// <summary>
+        /// Logs a connection attempt.
+        /// </summary>
+        /// <param name="addressStr">The address from which the connection attempt took place.</param>
+        void LogConnectionAttempt(string addressStr);
     }
 }

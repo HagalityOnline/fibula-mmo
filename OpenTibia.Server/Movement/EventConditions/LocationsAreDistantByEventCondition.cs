@@ -6,8 +6,8 @@
 
 namespace OpenTibia.Server.Movement.EventConditions
 {
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
 
     /// <summary>
     /// Class that represents an event condition that evaluates whether two locations are distant by at least a value, and if they should be on the same floor.

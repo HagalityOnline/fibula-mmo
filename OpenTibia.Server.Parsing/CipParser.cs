@@ -123,7 +123,7 @@ namespace OpenTibia.Server.Parsing
                 return null;
             }
 
-            var enclosingChars = new Dictionary<char, char> { { CloseCurly, OpenCurly }, { CloseParenthesis, OpenParenthesis} };
+            var enclosingChars = new Dictionary<char, char> { { CloseCurly, OpenCurly }, { CloseParenthesis, OpenParenthesis } };
 
             inputStr = inputStr.Trim(' '); // remove extra leading and trailing spaces.
             inputStr = TrimEnclosures(inputStr, enclosingChars);
@@ -175,9 +175,8 @@ namespace OpenTibia.Server.Parsing
         private static CipElement ParseElement(string eString)
         {
             var attrs = SplitByTokenPreserveQuoted(eString);
-            int intValue;
             var attributesList = attrs as IList<string> ?? attrs.ToList();
-            var hasIdData = int.TryParse(attributesList.FirstOrDefault(), out intValue);
+            var hasIdData = int.TryParse(attributesList.FirstOrDefault(), out int intValue);
 
             Func<string, CipAttribute> extractAttribute = str =>
             {
@@ -187,22 +186,20 @@ namespace OpenTibia.Server.Parsing
                 {
                     return new CipAttribute
                     {
-                        Name = sections[0].EndsWith("=") ? sections[0].Substring(0, sections[0].Length - 1) : sections[0]
+                        Name = sections[0].EndsWith("=") ? sections[0].Substring(0, sections[0].Length - 1) : sections[0],
                     };
                 }
-
-                int numericValue;
 
                 return new CipAttribute
                 {
                     Name = sections[0],
-                    Value = int.TryParse(sections[1], out numericValue) ? (IConvertible)numericValue : sections[1]
+                    Value = int.TryParse(sections[1], out int numericValue) ? (IConvertible)numericValue : sections[1],
                 };
             };
 
             var element = new CipElement(hasIdData ? intValue : -1)
             {
-                Attributes = attributesList.Skip(hasIdData ? 1 : 0).Select(a => extractAttribute(a)).ToList()
+                Attributes = attributesList.Skip(hasIdData ? 1 : 0).Select(a => extractAttribute(a)).ToList(),
             };
 
             return element;

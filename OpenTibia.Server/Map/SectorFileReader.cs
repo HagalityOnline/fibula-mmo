@@ -9,8 +9,6 @@ namespace OpenTibia.Server.Map
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Models.Structs;
     using OpenTibia.Server.Parsing;
 
     public class SectorFileReader
@@ -52,7 +50,7 @@ namespace OpenTibia.Server.Map
                 {
                     X = (ushort)(xOffset + Convert.ToUInt16(tileInfo[0])),
                     Y = (ushort)(yOffset + Convert.ToUInt16(tileInfo[1])),
-                    Z = z
+                    Z = z,
                 });
 
                 // load and add tile flags and contents.
@@ -67,9 +65,8 @@ namespace OpenTibia.Server.Map
                         else
                         {
                             // it's a flag
-                            TileFlag flagMatch;
 
-                            if (Enum.TryParse(attribute.Name, out flagMatch))
+                            if (Enum.TryParse(attribute.Name, out TileFlag flagMatch))
                             {
                                 newTile.SetFlag(flagMatch);
                             }

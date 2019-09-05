@@ -7,15 +7,24 @@
 namespace OpenTibia.Server.Movement
 {
     using System;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Movement.EventConditions;
 
-    internal class CreatureMovementOnMap : ThingMovementOnMap
+    internal class CreatureMovementOnMap : OnMapMovementEvent
     {
         public Direction AttemptedDirection { get; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CreatureMovementOnMap"/> class.
+        /// </summary>
+        /// <param name="requestorId"></param>
+        /// <param name="creatureMoving"></param>
+        /// <param name="fromLocation"></param>
+        /// <param name="toLocation"></param>
+        /// <param name="isTeleport"></param>
+        /// <param name="count"></param>
         public CreatureMovementOnMap(uint requestorId, ICreature creatureMoving, Location fromLocation, Location toLocation, bool isTeleport = false, byte count = 1)
             : base(requestorId, creatureMoving, fromLocation, creatureMoving.GetStackPosition(), toLocation, count, isTeleport)
         {

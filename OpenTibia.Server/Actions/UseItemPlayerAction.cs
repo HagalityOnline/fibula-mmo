@@ -8,16 +8,19 @@ namespace OpenTibia.Server.Actions
 {
     using System;
     using System.Linq;
-    using OpenTibia.Communications.Packets.Incoming;
-    using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Events;
-    using OpenTibia.Server.Scripting;
 
     internal class UseItemPlayerAction : BasePlayerAction
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="UseItemPlayerAction"/> class.
+        /// </summary>
+        /// <param name="player"></param>
+        /// <param name="itemUsePacket"></param>
+        /// <param name="retryLocation"></param>
         public UseItemPlayerAction(IPlayer player, ItemUsePacket itemUsePacket, Location retryLocation)
             : base(player, itemUsePacket, retryLocation)
         {
@@ -25,11 +28,9 @@ namespace OpenTibia.Server.Actions
 
         protected override void InternalPerform()
         {
-            var itemUsePacket = this.Packet as ItemUsePacket;
-
             IThing thingToUse = null;
 
-            if (itemUsePacket == null)
+            if (!(this.Packet is ItemUsePacket itemUsePacket))
             {
                 return;
             }
@@ -71,13 +72,12 @@ namespace OpenTibia.Server.Actions
             }
 
             var thingAsItem = thingToUse as IItem;
-            var thingAsContainer = thingAsItem as IContainer;
 
             if (thingAsItem != null && thingAsItem.ChangesOnUse)
             {
                 Functions.Change(ref thingToUse, thingAsItem.ChangeOnUseTo, 0);
             }
-            else if (thingAsItem != null && thingAsItem.IsContainer && thingAsContainer != null)
+            else if (thingAsItem != null && thingAsItem.IsContainer && thingAsItem is IContainer thingAsContainer)
             {
                 var openContainerId = this.Player.GetContainerId(thingAsContainer);
 
@@ -103,12 +103,12 @@ namespace OpenTibia.Server.Actions
 
                     this.ResponsePackets.Add(new ContainerOpenPacket
                     {
-                        ContainerId = (byte)thingAsContainer.GetIdFor(this.Player.CreatureId),
+                        ContainerId = (byte)thingAsContainer.GetIdFor(this.Player.Id),
                         ClientItemId = thingAsItem.ThingId,
                         HasParent = thingAsContainer.Parent != null,
                         Name = thingAsItem.Type.Name,
                         Volume = thingAsContainer.Volume,
-                        Contents = thingAsContainer.Content
+                        Contents = thingAsContainer.Content,
                     });
                 }
                 else
@@ -119,7 +119,7 @@ namespace OpenTibia.Server.Actions
 
                     this.ResponsePackets.Add(new ContainerClosePacket
                     {
-                        ContainerId = (byte)openContainerId
+                        ContainerId = (byte)openContainerId,
                     });
                 }
             }

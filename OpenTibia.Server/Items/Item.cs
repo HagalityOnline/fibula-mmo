@@ -8,9 +8,10 @@ namespace OpenTibia.Server.Items
 {
     using System;
     using System.Collections.Generic;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Server.Contracts;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Parsing;
 
     public class Item : Thing, IItem
@@ -68,7 +69,7 @@ namespace OpenTibia.Server.Items
 
         public Location CarryLocation { get; private set; }
 
-        public Dictionary<ItemAttribute, IConvertible> Attributes { get; }
+        public IDictionary<ItemAttribute, IConvertible> Attributes { get; }
 
         public bool IsCumulative => this.Type.Flags.Contains(ItemFlag.Cumulative);
 
@@ -116,7 +117,8 @@ namespace OpenTibia.Server.Items
 
         public bool IsGround => this.Type.Flags.Contains(ItemFlag.Bank);
 
-        public byte MovementPenalty {
+        public byte MovementPenalty
+        {
             get
             {
                 if (!this.IsGround || !this.Attributes.ContainsKey(ItemAttribute.Waypoints))
@@ -235,12 +237,16 @@ namespace OpenTibia.Server.Items
 
         public bool BlocksLay => this.Type.Flags.Contains(ItemFlag.Unlay);
 
-        public decimal Weight => (this.Type.Flags.Contains(ItemFlag.Take) ? Convert.ToDecimal(this.Attributes[ItemAttribute.Weight]) / 100 : default(decimal)) * this.Amount;
+        public decimal Weight => (this.Type.Flags.Contains(ItemFlag.Take) ? Convert.ToDecimal(this.Attributes[ItemAttribute.Weight]) / 100 : default) * this.Amount;
 
         public IContainer Parent { get; private set; }
 
         private uint holder;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Item"/> class.
+        /// </summary>
+        /// <param name="type"></param>
         public Item(ItemType type)
         {
             this.Type = type;
@@ -265,9 +271,8 @@ namespace OpenTibia.Server.Items
                 else
                 {
                     // these are safe to add as Attributes of the item.
-                    ItemAttribute itemAttr;
 
-                    if (!Enum.TryParse(attribute.Name, out itemAttr))
+                    if (!Enum.TryParse(attribute.Name, out ItemAttribute itemAttr))
                     {
                         if (!ServerConfiguration.SupressInvalidItemWarnings)
                         {
@@ -289,10 +294,10 @@ namespace OpenTibia.Server.Items
             }
         }
 
-        public void SetHolder(ICreature holder, Location holdingLoc = default(Location))
+        public void SetHolder(ICreature holder, Location holdingLoc = default)
         {
             var oldHolder = this.holder;
-            this.holder = holder?.CreatureId ?? 0;
+            this.holder = holder?.Id ?? 0;
             this.CarryLocation = holdingLoc;
 
             this.OnHolderChanged?.Invoke(this, oldHolder);

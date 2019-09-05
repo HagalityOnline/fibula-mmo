@@ -9,8 +9,8 @@ namespace OpenTibia.Server.Items
     using System;
     using System.Collections.Generic;
     using System.IO;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
 
     public class ItemType : IItemType
     {
@@ -28,6 +28,9 @@ namespace OpenTibia.Server.Items
 
         public ushort ClientId => this.Flags.Contains(ItemFlag.Disguise) ? Convert.ToUInt16(this.DefaultAttributes[ItemAttribute.DisguiseTarget]) : this.TypeId;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ItemType"/> class.
+        /// </summary>
         public ItemType()
         {
             this.TypeId = 0;
@@ -90,9 +93,7 @@ namespace OpenTibia.Server.Items
                 throw new InvalidOperationException("This ItemType is locked and cannot be altered.");
             }
 
-            ItemAttribute attribute;
-
-            if (!Enum.TryParse(attributeName, out attribute))
+            if (!Enum.TryParse(attributeName, out ItemAttribute attribute))
             {
                 throw new InvalidDataException($"Attempted to set an unknown Item attribute [{attributeName}].");
             }

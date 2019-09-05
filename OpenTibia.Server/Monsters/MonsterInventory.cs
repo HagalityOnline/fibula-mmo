@@ -9,8 +9,8 @@ namespace OpenTibia.Server.Monsters
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Server.Contracts.Abstractions;
     using OpenTibia.Server.Items;
 
     internal class MonsterInventory : IInventory
@@ -26,12 +26,15 @@ namespace OpenTibia.Server.Monsters
 
         public ICreature Owner { get; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MonsterInventory"/> class.
+        /// </summary>
+        /// <param name="owner"></param>
+        /// <param name="inventoryComposition"></param>
+        /// <param name="maxCapacity"></param>
         public MonsterInventory(ICreature owner, IEnumerable<Tuple<ushort, byte, ushort>> inventoryComposition, ushort maxCapacity = 100) // 100 is arbitrary.
         {
-            if (owner == null)
-            {
-                throw new ArgumentNullException(nameof(owner));
-            }
+            owner.ThrowIfNull(nameof(owner));
 
             this.Owner = owner;
             this.inventory = new Dictionary<byte, Tuple<IItem, ushort>>();
@@ -58,9 +61,8 @@ namespace OpenTibia.Server.Monsters
                 }
 
                 // got lucky!
-                var newItem = ItemFactory.Create(tuple.Item1) as IItem;
 
-                if (newItem == null)
+                if (!(ItemFactory.Create(tuple.Item1) is IItem newItem))
                 {
                     Console.WriteLine($"Unknown item with id {tuple.Item1} as loot in monster type {(this.Owner as Monster)?.Type.RaceId}.");
                     continue;
@@ -73,8 +75,7 @@ namespace OpenTibia.Server.Monsters
                     newItem.SetAmount(amount);
                 }
 
-                IItem unused;
-                this.Add(newItem, out unused);
+                this.Add(newItem, out IItem unused);
             }
         }
 
@@ -184,7 +185,7 @@ namespace OpenTibia.Server.Monsters
                 if (found.Count == count)
                 {
                     this.inventory.Remove(positionByte);
-                    found.SetHolder(null, default(Location));
+                    found.SetHolder(null, default);
 
                     return found;
                 }
@@ -222,7 +223,7 @@ namespace OpenTibia.Server.Monsters
                 if (found.Count == count)
                 {
                     this.inventory.Remove(slot);
-                    found.SetHolder(null, default(Location));
+                    found.SetHolder(null, default);
 
                     removed = true;
                     return found;

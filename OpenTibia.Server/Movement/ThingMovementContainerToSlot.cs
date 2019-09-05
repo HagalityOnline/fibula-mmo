@@ -7,14 +7,22 @@
 namespace OpenTibia.Server.Movement
 {
     using System;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Movement.EventConditions;
     using OpenTibia.Server.Notifications;
 
-    internal class ThingMovementContainerToSlot : MovementBase
+    internal class ThingMovementContainerToSlot : BaseMovementEvent
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ThingMovementContainerToSlot"/> class.
+        /// </summary>
+        /// <param name="requestorId"></param>
+        /// <param name="thingMoving"></param>
+        /// <param name="fromLocation"></param>
+        /// <param name="toLocation"></param>
+        /// <param name="count"></param>
         public ThingMovementContainerToSlot(uint requestorId, IThing thingMoving, Location fromLocation, Location toLocation, byte count = 1)
             : base(requestorId, EvaluationTime.OnExecute)
         {
@@ -68,16 +76,13 @@ namespace OpenTibia.Server.Movement
 
         private void MoveContainerToSlot()
         {
-            IItem addedItem;
-            var updateItem = this.Thing as IItem;
-
-            if (this.FromContainer == null || updateItem == null || this.Requestor == null)
+            if (this.FromContainer == null || !(this.Thing is IItem updateItem) || this.Requestor == null)
             {
                 return;
             }
 
             // attempt to remove from the source container
-            if (!this.FromContainer.RemoveContent(updateItem.Type.TypeId, this.FromIndex, this.Count, out addedItem))
+            if (!this.FromContainer.RemoveContent(updateItem.Type.TypeId, this.FromIndex, this.Count, out IItem addedItem))
             {
                 return;
             }

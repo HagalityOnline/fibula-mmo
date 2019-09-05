@@ -8,8 +8,7 @@ namespace OpenTibia.Server.Items
 {
     using System;
     using System.Collections.Generic;
-    using System.IO;
-    using OpenTibia.Data.Contracts;
+    using OpenTibia.Server.Contracts.Enumerations;
 
     public static class ItemFactory
     {

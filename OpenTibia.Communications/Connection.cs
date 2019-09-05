@@ -8,75 +8,127 @@ namespace OpenTibia.Communications
 {
     using System;
     using System.Net.Sockets;
-    using OpenTibia.Security;
-    using OpenTibia.Server.Data;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Communications.Contracts.Abstractions;
+    using OpenTibia.Communications.Contracts.Delegates;
 
-    public class Connection
+    public class Connection : IConnection
     {
-        private object writeLock;
+        private readonly object writeLock;
 
-        public delegate void OnConnectionClose(Connection c);
+        private readonly Socket socket;
 
-        public delegate void OnProcess(Connection c, NetworkMessage m);
+        private readonly NetworkStream stream;
 
-        public delegate void OnPostProcess(Connection c);
-
-        public event OnConnectionClose OnCloseEvent;
-
-        public event OnProcess OnProcessEvent;
-
-        public event OnPostProcess OnPostProcessEvent;
-
-        public Socket Socket { get; private set; }
-
-        public NetworkStream Stream { get; private set; }
-
-        public NetworkMessage InMessage { get; }
-
-        public uint PlayerId { get; set; }
-
-        public uint[] XTeaKey { get; private set; }
-
-        public bool IsAuthenticated { get; set; }
-
-        public string SourceIp => this.Socket?.RemoteEndPoint.ToString();
-
-        public Connection()
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Connection"/> class.
+        /// </summary>
+        /// <param name="socket">The socket that this connection is for.</param>
+        public Connection(Socket socket)
         {
+            socket.ThrowIfNull(nameof(socket));
+
             this.writeLock = new object();
-            this.Socket = null;
-            this.Stream = null;
-            this.InMessage = new NetworkMessage(0);
+            this.socket = socket;
+            this.stream = new NetworkStream(this.socket);
+
+            this.InboundMessage = new NetworkMessage(isOutbound: false);
             this.XTeaKey = new uint[4];
             this.IsAuthenticated = false;
         }
 
-        public void BeginStreamRead()
+        /// <summary>
+        /// Event fired when this connection has been closed.
+        /// </summary>
+        public event OnConnectionClosed ConnectionClosed;
+
+        /// <summary>
+        /// Event fired when this connection has it's <see cref="IConnection.InboundMessage"/> ready to be proccessed.
+        /// </summary>
+        public event OnMessageReadyToProccess MessageReadyToProccess;
+
+        /// <summary>
+        /// Event fired right after this connection has had it's <see cref="IConnection.InboundMessage"/> proccessed by any subscriber of the <see cref="MessageReadyToProccess"/> event.
+        /// </summary>
+        public event OnMessageProccessed AfterMessageProcessed;
+
+        public INetworkMessage InboundMessage { get; }
+
+        public Guid PlayerId { get; set; }
+
+        public uint[] XTeaKey { get; set; }
+
+        public bool IsAuthenticated { get; set; }
+
+        public string SocketIp
         {
-            this.Stream.BeginRead(this.InMessage.Buffer, 0, 2, this.OnRead, null);
+            get
+            {
+                return this.socket?.RemoteEndPoint?.ToString();
+            }
         }
 
-        public void OnAccept(IAsyncResult ar)
+        public bool IsOrphaned
         {
-            if (ar == null)
+            get
             {
-                throw new ArgumentNullException(nameof(ar));
+                return !this.socket?.Connected ?? false;
+            }
+        }
+
+        public void BeginStreamRead()
+        {
+            this.stream.BeginRead(this.InboundMessage.Buffer, 0, 2, this.OnRead, null);
+        }
+
+        public void Send(INetworkMessage message)
+        {
+            this.Send(message, true);
+        }
+
+        public void Send(INetworkMessage message, bool useEncryption, bool managementProtocol = false)
+        {
+            // if (isInTransaction)
+            // {
+            //    if (useEncryption == false)
+            //        throw new Exception("Cannot send a packet without encryption as part of a transaction.");
+
+            // transactionMessage.AddBytes(message.GetPacket());
+            // }
+            // else
+            // {
+            this.SendMessage(message, useEncryption, managementProtocol);
+            // }
+        }
+
+        public void Send(INotification notification)
+        {
+            notification.ThrowIfNull(nameof(notification));
+
+            var networkMessage = new NetworkMessage();
+
+            if (notification.Packets.Count == 0)
+            {
+                return;
             }
 
-            this.Socket = ((TcpListener)ar.AsyncState).EndAcceptSocket(ar);
-            this.Stream = new NetworkStream(this.Socket);
+            foreach (var packet in notification.Packets)
+            {
+                packet.WriteToMessage(networkMessage);
+            }
 
-            if (SimpleDoSDefender.Instance.IsBlockedAddress(this.SourceIp))
-            {
-                // TODO: evaluate if it is worth just leaving the connection open but ignore it, so that they think they are successfully DoSing...
-                // But we would need to think if it is a connection drain attack then...
-                this.Close();
-            }
-            else
-            {
-                SimpleDoSDefender.Instance.LogConnectionAttempt(this.SourceIp);
-                this.BeginStreamRead();
-            }
+            this.Send(networkMessage);
+
+            Console.WriteLine($"Sent {notification.GetType().Name} [{notification.EventId}] to {this.PlayerId}");
+        }
+
+        public void Close()
+        {
+            this.stream.Close();
+            this.socket.Close();
+
+            // Tells the subscribers of this event that this connection has been closed.
+            this.ConnectionClosed?.Invoke(this);
         }
 
         private void OnRead(IAsyncResult ar)
@@ -88,8 +140,13 @@ namespace OpenTibia.Communications
 
             try
             {
-                this.OnProcessEvent?.Invoke(this, this.InMessage);
-                this.OnPostProcessEvent?.Invoke(this);
+                if (this.MessageReadyToProccess != null)
+                {
+                    this.MessageReadyToProccess.Invoke(this, this.InboundMessage);
+
+                    // By design, AfterMessageProcessed is only fired if we have at least one subscriber.
+                    this.AfterMessageProcessed?.Invoke(this);
+                }
             }
             catch (Exception e)
             {
@@ -107,27 +164,28 @@ namespace OpenTibia.Communications
         {
             try
             {
-                int read = this.Stream.EndRead(ar);
+                int read = this.stream.EndRead(ar);
 
                 if (read == 0)
                 {
                     // client disconnected
                     this.Close();
+
                     return false;
                 }
 
-                int size = BitConverter.ToUInt16(this.InMessage.Buffer, 0) + 2;
+                int size = BitConverter.ToUInt16(this.InboundMessage.Buffer, 0) + 2;
 
                 while (read < size)
                 {
-                    if (this.Stream.CanRead)
+                    if (this.stream.CanRead)
                     {
-                        read += this.Stream.Read(this.InMessage.Buffer, read, size - read);
+                        read += this.stream.Read(this.InboundMessage.Buffer, read, size - read);
                     }
                 }
 
-                this.InMessage.Resize(size);
-                this.InMessage.GetUInt16(); // total length
+                this.InboundMessage.Resize(size);
+                this.InboundMessage.GetUInt16(); // total length
 
                 return true;
             }
@@ -159,7 +217,8 @@ namespace OpenTibia.Communications
         //    SendMessage(transactionMessage, true);
         //    isInTransaction = false;
         // }
-        private void SendMessage(NetworkMessage message, bool useEncryption, bool managementProtocol = false)
+
+        private void SendMessage(INetworkMessage message, bool useEncryption, bool managementProtocol = false)
         {
             if (useEncryption)
             {
@@ -174,47 +233,13 @@ namespace OpenTibia.Communications
             {
                 lock (this.writeLock)
                 {
-                    this.Stream.BeginWrite(message.Buffer, 0, message.Length, null, null);
+                    this.stream.BeginWrite(message.Buffer, 0, message.Length, null, null);
                 }
             }
             catch (ObjectDisposedException)
             {
                 this.Close();
             }
-        }
-
-        public void Send(NetworkMessage message)
-        {
-            this.Send(message, true);
-        }
-
-        public void Send(NetworkMessage message, bool useEncryption, bool managementProtocol = false)
-        {
-            // if (isInTransaction)
-            // {
-            //    if (useEncryption == false)
-            //        throw new Exception("Cannot send a packet without encryption as part of a transaction.");
-
-            // transactionMessage.AddBytes(message.GetPacket());
-            // }
-            // else
-            // {
-            this.SendMessage(message, useEncryption, managementProtocol);
-            // }
-        }
-
-        public void Close()
-        {
-            this.Stream.Close();
-            this.Socket.Close();
-
-            // Tells the subscribers of this event that this connection has been closed.
-            this.OnCloseEvent?.Invoke(this);
-        }
-
-        public void SetXtea(uint[] xteaKey)
-        {
-            this.XTeaKey = xteaKey;
         }
     }
 }

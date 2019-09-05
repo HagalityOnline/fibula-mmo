@@ -26,9 +26,9 @@ namespace OpenTibia.Data.Models
 
         public string Comment { get; set; }
 
-        public int Timestamp { get; set; }
+        public long Timestamp { get; set; }
 
-        public int BanishedUntil { get; set; }
+        public long BanishedUntil { get; set; }
 
         public int GmId { get; set; }
 

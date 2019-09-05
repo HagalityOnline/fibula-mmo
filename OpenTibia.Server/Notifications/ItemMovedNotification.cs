@@ -6,62 +6,40 @@
 
 namespace OpenTibia.Server.Notifications
 {
-    using System;
-    using OpenTibia.Communications;
+    using OpenTibia.Common.Helpers;
     using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
 
     internal class ItemMovedNotification : Notification
     {
-        public bool WasTeleport { get; }
-
-        public byte FromStackpos { get; }
-
-        public byte ToStackpos { get; }
-
-        public Location FromLocation { get; }
-
-        public Location ToLocation { get; }
-
-        public IItem Item { get; }
-
-        public ItemMovedNotification(Connection connection, IItem item, Location fromLocation, byte fromStackPos, Location toLocation, byte toStackPos, bool wasTeleport)
-            : base(connection)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ItemMovedNotification"/> class.
+        /// </summary>
+        /// <param name="arguments">The arguments for this notification.</param>
+        public ItemMovedNotification(ItemMovedNotificationArguments arguments)
+            : base(audience, playerId)
         {
-            if (item == null)
-            {
-                throw new ArgumentNullException(nameof(item));
-            }
+            arguments.ThrowIfNull(nameof(arguments));
 
-            this.Item = item;
-            this.FromLocation = fromLocation;
-            this.FromStackpos = fromStackPos;
-            this.ToLocation = toLocation;
-            this.ToStackpos = toStackPos;
-            this.WasTeleport = wasTeleport;
+            this.Arguments = arguments;
         }
+
+        /// <summary>
+        /// Gets this notification's arguments.
+        /// </summary>
+        public ItemMovedNotificationArguments Arguments { get; }
 
         public override void Prepare()
         {
-            var player = Game.Instance.GetCreatureWithId(this.Connection.PlayerId);
+            var player = Game.Instance.GetCreatureWithId(this.Arguments.PlayerId);
 
-            if (player.CanSee(this.FromLocation) && this.FromStackpos < 10)
+            if (player.CanSee(this.Arguments.FromLocation) && this.Arguments.FromStackpos < 10)
             {
-                this.ResponsePackets.Add(new RemoveAtStackposPacket
-                {
-                    Location = this.FromLocation,
-                    Stackpos = this.FromStackpos
-                });
+                this.Packets.Add(new RemoveAtStackposPacket(this.Arguments.FromLocation, this.Arguments.FromStackpos));
             }
 
-            if (player.CanSee(this.ToLocation))
+            if (player.CanSee(this.Arguments.ToLocation))
             {
-                this.ResponsePackets.Add(new AddItemPacket
-                {
-                    Location = this.ToLocation,
-                    Item = this.Item
-                });
+                this.Packets.Add(new AddItemPacket(this.Arguments.ToLocation, this.Arguments.Item));
             }
         }
     }

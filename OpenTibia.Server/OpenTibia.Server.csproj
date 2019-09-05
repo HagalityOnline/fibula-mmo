@@ -1,7 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <TargetFramework>netcoreapp3.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -428,21 +429,23 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="2.0.1" />
-    <PackageReference Include="StackExchange.Redis" Version="1.2.6" />
-    <PackageReference Include="StyleCop.Analyzers" Version="1.0.2" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="3.0.0-preview8.19405.11" />
+    <PackageReference Include="StyleCop.Analyzers" Version="1.1.118">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\OpenTibia.Common.Utilities\OpenTibia.Common.Utilities.csproj" />
     <ProjectReference Include="..\OpenTibia.Communications\OpenTibia.Communications.csproj" />
     <ProjectReference Include="..\OpenTibia.Configuration\OpenTibia.Configuration.csproj" />
     <ProjectReference Include="..\OpenTibia.Data.Contracts\OpenTibia.Data.Contracts.csproj" />
     <ProjectReference Include="..\OpenTibia.Data\OpenTibia.Data.csproj" />
     <ProjectReference Include="..\OpenTibia.Scheduling.Contracts\OpenTibia.Scheduling.Contracts.csproj" />
     <ProjectReference Include="..\OpenTibia.Scheduling\OpenTibia.Scheduling.csproj" />
-    <ProjectReference Include="..\OpenTibia.Server.Data\OpenTibia.Server.Data.csproj" />
+    <ProjectReference Include="..\OpenTibia.Server.Contracts\OpenTibia.Server.Contracts.csproj" />
     <ProjectReference Include="..\OpenTibia.Server.Parsing\OpenTibia.Server.Parsing.csproj" />
-    <ProjectReference Include="..\OpenTibia.Server.Utils\OpenTibia.Server.Utils.csproj" />
   </ItemGroup>
 
 </Project>

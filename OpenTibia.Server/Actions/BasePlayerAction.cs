@@ -9,22 +9,20 @@ namespace OpenTibia.Server.Actions
     using System.Collections.Generic;
     using System.Linq;
     using OpenTibia.Common.Helpers;
-    using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Communications.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Notifications;
 
     internal abstract class BasePlayerAction : IAction
     {
-        public IPlayer Player { get; }
-
-        public IPacketIncoming Packet { get; }
-
-        public Location RetryLocation { get; }
-
-        public IList<IPacketOutgoing> ResponsePackets { get; }
-
-        protected BasePlayerAction(IPlayer player, IPacketIncoming packet, Location retryLocation)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="BasePlayerAction"/> class.
+        /// </summary>
+        /// <param name="player"></param>
+        /// <param name="packet"></param>
+        /// <param name="retryLocation"></param>
+        protected BasePlayerAction(IPlayer player, IIncomingPacket packet, Location retryLocation)
         {
             player.ThrowIfNull(nameof(player));
             packet.ThrowIfNull(nameof(packet));
@@ -32,8 +30,16 @@ namespace OpenTibia.Server.Actions
             this.Player = player;
             this.Packet = packet;
             this.RetryLocation = retryLocation;
-            this.ResponsePackets = new List<IPacketOutgoing>();
+            this.ResponsePackets = new List<IOutgoingPacket>();
         }
+
+        public IPlayer Player { get; }
+
+        public IIncomingPacket Packet { get; }
+
+        public Location RetryLocation { get; }
+
+        public IList<IOutgoingPacket> ResponsePackets { get; }
 
         public void Perform()
         {

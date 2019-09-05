@@ -7,55 +7,140 @@
 namespace OpenTibia.Server.Standalone
 {
     using System;
+    using System.Collections.Generic;
+    using System.IO;
     using System.Threading;
     using System.Threading.Tasks;
+    using Microsoft.AspNetCore.Hosting.Internal;
+    using Microsoft.Extensions.Configuration;
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.FileProviders;
+    using OpenTibia.Common.Helpers;
     using OpenTibia.Communications;
-    using OpenTibia.Communications.Interfaces;
+    using OpenTibia.Communications.Contracts.Abstractions;
+    using OpenTibia.Communications.Handlers;
+    using OpenTibia.Security;
+    using OpenTibia.Server.Contracts.Abstractions;
     using OpenTibia.Server.Events;
-    using OpenTibia.Server.Handlers;
-    using OpenTibia.Server.Handlers.Management;
     using OpenTibia.Server.Items;
+    using OpenTibia.Server.Mapping;
     using OpenTibia.Server.Monsters;
+    using Serilog;
 
+    /// <summary>
+    /// Startup class for the OpenTibia.
+    /// </summary>
     public class Program
     {
-        private static IOpenTibiaListener loginListener;
-        private static IOpenTibiaListener gameListener;
-        // private static IOpenTibiaListener managementListener;
-        static void Main()
+        /// <summary>
+        /// The main entry point to the server program.
+        /// </summary>
+        /// <param name="args">The arguments of the program.</param>
+        public static async Task Main(string[] args)
         {
-            var cancellationTokenSource = new CancellationTokenSource();
+            //var host = new HostBuilder()
+            //    .ConfigureHostConfiguration(configHost =>
+            //    {
+            //        configHost.SetBasePath(Directory.GetCurrentDirectory());
+            //        configHost.AddJsonFile("hostsettings.json", optional: true, reloadOnChange: true);
+            //        configHost.AddEnvironmentVariables(prefix: "OTS_");
+            //        configHost.AddCommandLine(args);
+            //    })
+            //    .ConfigureAppConfiguration((hostContext, configApp) =>
+            //    {
+            //        configApp.SetBasePath(Directory.GetCurrentDirectory());
+            //        configApp.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+            //        configApp.AddJsonFile($"appsettings.{hostContext.HostingEnvironment.EnvironmentName}.json", optional: true, reloadOnChange: true);
+            //        configApp.AddEnvironmentVariables(prefix: "OTS_");
+            //        configApp.AddCommandLine(args);
+            //    })
+            //    .Build();
 
-            // Set the loaders to use.
-            Game.Instance.Initialize(new MoveUseItemEventLoader(), new ObjectsFileItemLoader(), new MonFilesMonsterLoader());
+            //await host.RunAsync();
 
-            // TODO: load and validate external aux files.
+            var env = new HostingEnvironment
+            {
+                EnvironmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
+                ApplicationName = AppDomain.CurrentDomain.FriendlyName,
+                ContentRootPath = AppDomain.CurrentDomain.BaseDirectory,
+                ContentRootFileProvider = new PhysicalFileProvider(AppDomain.CurrentDomain.BaseDirectory),
+            };
 
-            // Set the persistence storage source (database)
+            var configuration = new ConfigurationBuilder()
+                    .SetBasePath(Directory.GetCurrentDirectory())
+                    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                    .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true)
+                    .AddEnvironmentVariables()
+                    .Build();
 
-            // Initilize client listening pipeline (but reject game connections)
-            loginListener = new LoginListener(new ManagementHandlerFactory(), 7171);
-            gameListener = new GameListener(new GameHandlerFactory(), 7172);
-            // managementListener = new ManagementListener(new ManagementHandlerFactory());
-            var listeningTask = RunAsync(cancellationTokenSource.Token);
+            var services = ConfigureServices(new ServiceCollection(), configuration);
+            var serviceProvider = services.BuildServiceProvider();
 
-            // Initilize game
-            Game.Instance.Begin(cancellationTokenSource.Token);
+            var masterCancellationToken = serviceProvider.GetService<CancellationTokenSource>().Token;
 
-            // TODO: open up game connections
-            listeningTask.Wait(cancellationTokenSource.Token);
+            var tasksToRun = new List<Task>
+            {
+                serviceProvider.GetService<IGame>().RunAsync(masterCancellationToken),
+            };
+
+            foreach (var listener in serviceProvider.GetServices<IOpenTibiaListener>())
+            {
+                tasksToRun.Add(listener.RunAsync(masterCancellationToken));
+            }
+
+            await Task.WhenAll(tasksToRun.ToArray());
         }
 
-        private static async Task RunAsync(CancellationToken cancellationToken)
+        private static IServiceCollection ConfigureServices(IServiceCollection services, IConfiguration configuration)
         {
-            loginListener.BeginListening();
-            // managementListener.BeginListening();
-            gameListener.BeginListening();
+            services.ThrowIfNull(nameof(services));
+            configuration.ThrowIfNull(nameof(configuration));
 
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
-            }
+            Log.Logger = new LoggerConfiguration()
+                .ReadFrom.Configuration(configuration)
+                .Enrich.FromLogContext()
+                .CreateLogger();
+
+            // Add known instances of configuration and logger.
+            services.AddSingleton(configuration);
+            services.AddSingleton(Log.Logger);
+
+            // Add the master cancellation token source of the entire service.
+            services.AddSingleton<CancellationTokenSource>();
+
+            // Add core services
+            services.AddSingleton<IGame, Game>();
+            services.AddSingleton<IMap, Map>();
+            services.AddSingleton<IConnectionManager, ConnectionManager>();
+            services.AddSingleton<IProtocolFactory, ProtocolFactory>();
+            services.AddSingleton<IDoSDefender, SimpleDoSDefender>();
+
+            // Add packet handlers and selectors for those handlers.
+            services.AddGameHandlers();
+            services.AddManagementHandlers();
+            services.AddHandlerSelectors();
+
+            // Loaders to take care of loading input files such as the map, items and scripts.
+            AddLoaders(services);
+
+            // Listeners for request processing.
+            AddListeners(services);
+
+            return services;
+        }
+
+        private static void AddLoaders(IServiceCollection services)
+        {
+            services.AddSingleton<IItemEventLoader, MoveUseItemEventLoader>();
+            services.AddSingleton<IItemLoader, ObjectsFileItemLoader>();
+            services.AddSingleton<IMonsterLoader, MonFilesMonsterLoader>();
+        }
+
+        private static void AddListeners(IServiceCollection services)
+        {
+            // TODO: add singleton for ManagementListener
+            services.AddSingleton<IOpenTibiaListener, LoginListener>();
+            services.AddSingleton<IOpenTibiaListener, GameListener>();
         }
     }
 }

@@ -6,8 +6,8 @@
 
 namespace OpenTibia.Server.Movement.EventConditions
 {
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
 
     /// <summary>
     /// Class that represents a condition that evaluates whether a throw from A to B makes sense.

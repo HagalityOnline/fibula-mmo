@@ -8,16 +8,24 @@ namespace OpenTibia.Server.Movement
 {
     using System;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Events;
     using OpenTibia.Server.Movement.EventConditions;
     using OpenTibia.Server.Notifications;
 
-    internal class ThingMovementGroundToContainer : MovementBase
+    internal class ThingMovementGroundToContainer : BaseMovementEvent
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ThingMovementGroundToContainer"/> class.
+        /// </summary>
+        /// <param name="requestorId"></param>
+        /// <param name="thingMoving"></param>
+        /// <param name="fromLocation"></param>
+        /// <param name="fromStackPos"></param>
+        /// <param name="toLocation"></param>
+        /// <param name="count"></param>
         public ThingMovementGroundToContainer(uint requestorId, IThing thingMoving, Location fromLocation, byte fromStackPos, Location toLocation, byte count = 1)
             : base(requestorId, EvaluationTime.OnExecute)
         {
@@ -50,7 +58,7 @@ namespace OpenTibia.Server.Movement
             this.Conditions.Add(new GrabberHasContainerOpenEventCondition(this.RequestorId, this.ToContainer));
             this.Conditions.Add(new ContainerHasEnoughCapacityEventCondition(this.ToContainer));
             this.Conditions.Add(new ThingIsTakeableEventCondition(this.RequestorId, this.Thing));
-            this.Conditions.Add(new LocationsMatchEventCondition(this.Thing?.Location ?? default(Location), this.FromLocation));
+            this.Conditions.Add(new LocationsMatchEventCondition(this.Thing?.Location ?? default, this.FromLocation));
             this.Conditions.Add(new TileContainsThingEventCondition(this.Thing, this.FromLocation, this.Count));
 
             this.ActionsOnPass.Add(new GenericEventAction(this.PickupToContainer));
@@ -74,9 +82,7 @@ namespace OpenTibia.Server.Movement
 
         private void PickupToContainer()
         {
-            var thingAsItem = this.Thing as IItem;
-
-            if (this.FromTile == null || this.ToContainer == null || this.Thing == null || thingAsItem == null)
+            if (this.FromTile == null || this.ToContainer == null || this.Thing == null || !(this.Thing is IItem thingAsItem))
             {
                 return;
             }
@@ -105,7 +111,7 @@ namespace OpenTibia.Server.Movement
             if (thingAsItem == null || this.ToContainer.AddContent(thingAsItem, this.ToIndex))
             {
                 // and call any separation events.
-                if (this.FromTile.HandlesSeparation) // TODO: what happens on separation of less than required quantity, etc?
+                if (this.FromTile.HasSeparationEvents) // TODO: what happens on separation of less than required quantity, etc?
                 {
                     foreach (var itemWithSeparation in this.FromTile.ItemsWithSeparation)
                     {
@@ -130,7 +136,7 @@ namespace OpenTibia.Server.Movement
             Game.Instance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, this.FromTile.Location, Game.Instance.GetMapTileDescription(conn.PlayerId, this.FromTile.Location)), this.FromTile.Location);
 
             // call any collision events again.
-            if (!this.FromTile.HandlesCollision)
+            if (!this.FromTile.HasCollisionEvents)
             {
                 return;
             }

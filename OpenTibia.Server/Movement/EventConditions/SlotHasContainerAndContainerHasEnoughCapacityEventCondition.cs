@@ -6,8 +6,8 @@
 
 namespace OpenTibia.Server.Movement.EventConditions
 {
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Abstractions;
 
     /// <summary>
     /// Class that represents an event condition that evaluates whether a slot has a container on it, and if that container has enough capacity on it.

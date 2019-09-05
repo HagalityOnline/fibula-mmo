@@ -10,10 +10,10 @@ namespace OpenTibia.Server.Monsters
     using System.Collections.Generic;
     using System.IO;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Structs;
+    using OpenTibia.Server.Models;
     using OpenTibia.Server.Parsing;
 
     public enum MonsterSkill : byte
@@ -32,10 +32,10 @@ namespace OpenTibia.Server.Monsters
         SHIELDING,
         MANA,
         MAGICLEVEL,
-        LEVEL
+        LEVEL,
     }
 
-    public class MonsterType
+    public class MonsterType : IMonsterType
     {
         public bool Locked { get; private set; }
 
@@ -65,7 +65,7 @@ namespace OpenTibia.Server.Monsters
 
         public List<Tuple<ushort, byte, ushort>> InventoryComposition { get; }
 
-        public Tuple<byte, byte, byte, byte> Strategy { get; private set; }
+        public (byte, byte, byte, byte) Strategy { get; private set; }
 
         public ushort Attack { get; private set; }
 
@@ -77,9 +77,9 @@ namespace OpenTibia.Server.Monsters
 
         public ushort Corpse { get; private set; }
 
-        public uint MaxHitPoints { get; private set; }
+        public ushort MaxHitPoints { get; private set; }
 
-        public uint MaxManaPoints { get; }
+        public ushort MaxManaPoints { get; }
 
         public BloodType Blood { get; private set; }
 
@@ -87,6 +87,9 @@ namespace OpenTibia.Server.Monsters
 
         public ushort Capacity { get; private set; }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MonsterType"/> class.
+        /// </summary>
         public MonsterType()
         {
             this.RaceId = 0;
@@ -166,7 +169,7 @@ namespace OpenTibia.Server.Monsters
                 this.Outfit = new Outfit
                 {
                     Id = outfitId,
-                    LikeType = outfitSections[0]
+                    LikeType = outfitSections[0],
                 };
             }
             else
@@ -177,7 +180,7 @@ namespace OpenTibia.Server.Monsters
                     Head = outfitSections[0],
                     Body = outfitSections[1],
                     Legs = outfitSections[2],
-                    Feet = outfitSections[3]
+                    Feet = outfitSections[3],
                 };
             }
         }
@@ -199,9 +202,7 @@ namespace OpenTibia.Server.Monsters
                 throw new InvalidOperationException("This MonsterType is locked and cannot be altered.");
             }
 
-            BloodType bloodType;
-
-            if (Enum.TryParse(propData, out bloodType))
+            if (Enum.TryParse(propData, out BloodType bloodType))
             {
                 this.Blood = bloodType;
             }
@@ -303,7 +304,7 @@ namespace OpenTibia.Server.Monsters
                 throw new InvalidDataException($"Unexpected number of elements in Strategy value {strategyStr} on monster type {this.Name}.");
             }
 
-            this.Strategy = new Tuple<byte, byte, byte, byte>(strat[0], strat[1], strat[2], strat[3]);
+            this.Strategy = (strat[0], strat[1], strat[2], strat[3]);
         }
 
         internal void SetFlags(string flagsStr)
@@ -320,9 +321,7 @@ namespace OpenTibia.Server.Monsters
                     continue;
                 }
 
-                CreatureFlag creatureFlag;
-
-                if (Enum.TryParse(flagName, out creatureFlag))
+                if (Enum.TryParse(flagName, out CreatureFlag creatureFlag))
                 {
                     this.Flags.Add(creatureFlag);
                 }
@@ -349,7 +348,7 @@ namespace OpenTibia.Server.Monsters
             var enclosingChars = new Dictionary<char, char>
             {
                 { CipParser.CloseCurly, CipParser.OpenCurly },
-                { CipParser.CloseParenthesis, CipParser.OpenParenthesis }
+                { CipParser.CloseParenthesis, CipParser.OpenParenthesis },
             };
 
             var enclosures = CipParser.GetEnclosedButPreserveQuoted(v, enclosingChars);
@@ -368,9 +367,7 @@ namespace OpenTibia.Server.Monsters
                     throw new InvalidDataException($"Unexpected number of elements in skill line {v} on monster type {this.Name}.");
                 }
 
-                MonsterSkill mSkill;
-
-                if (!Enum.TryParse(skillParams[0].ToUpper(), out mSkill))
+                if (!Enum.TryParse(skillParams[0].ToUpper(), out MonsterSkill mSkill))
                 {
                     continue;
                 }
@@ -378,7 +375,7 @@ namespace OpenTibia.Server.Monsters
                 switch (mSkill)
                 {
                     case MonsterSkill.HITPOINTS:
-                        this.MaxHitPoints = Convert.ToUInt32(skillParams[1]);
+                        this.MaxHitPoints = Convert.ToUInt16(skillParams[1]);
                         break;
                     case MonsterSkill.GOSTRENGTH:
                         try
@@ -440,7 +437,7 @@ namespace OpenTibia.Server.Monsters
             var enclosingChars = new Dictionary<char, char>
             {
                 { CipParser.CloseCurly, CipParser.OpenCurly },
-                { CipParser.CloseParenthesis, CipParser.OpenParenthesis }
+                { CipParser.CloseParenthesis, CipParser.OpenParenthesis },
             };
 
             var enclosures = CipParser.GetEnclosedButPreserveQuoted(v, enclosingChars);

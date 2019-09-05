@@ -6,18 +6,23 @@
 
 namespace OpenTibia.Server.Events
 {
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Server.Contracts.Abstractions;
 
     internal class ItemEventFunction : IItemEventFunction
     {
-        public string FunctionName { get; }
-
-        public object[] Parameters { get; }
-
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ItemEventFunction"/> class.
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="parameters"></param>
         public ItemEventFunction(string name, params object[] parameters)
         {
             this.FunctionName = name;
             this.Parameters = parameters;
         }
+
+        public string FunctionName { get; }
+
+        public object[] Parameters { get; }
     }
 }

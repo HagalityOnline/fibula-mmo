@@ -7,10 +7,15 @@
 namespace OpenTibia.Server.Events
 {
     using System.Collections.Generic;
-    using OpenTibia.Data.Contracts;
+    using OpenTibia.Server.Contracts.Enumerations;
 
     internal class MovementItemEvent : BaseItemEvent
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MovementItemEvent"/> class.
+        /// </summary>
+        /// <param name="conditionSet"></param>
+        /// <param name="actionSet"></param>
         public MovementItemEvent(IList<string> conditionSet, IList<string> actionSet)
             : base(conditionSet, actionSet)
         {

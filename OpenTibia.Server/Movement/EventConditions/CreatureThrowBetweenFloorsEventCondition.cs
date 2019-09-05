@@ -6,9 +6,9 @@
 
 namespace OpenTibia.Server.Movement.EventConditions
 {
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
 
     /// <summary>
     /// Class that represents a condition that evaluates whether a creature can throw a thing to a location on a different floor.
@@ -49,10 +49,9 @@ namespace OpenTibia.Server.Movement.EventConditions
         /// <inheritdoc/>
         public bool Evaluate()
         {
-            var thingAsCreature = this.Thing as ICreature;
             var requestor = this.RequestorId == 0 ? null : Game.Instance.GetCreatureWithId(this.RequestorId);
 
-            if (requestor == null || thingAsCreature == null)
+            if (requestor == null || !(this.Thing is ICreature thingAsCreature))
             {
                 // Not a creature requesting this one, possibly a script.
                 // Or the thing moving is null, not this policy's job to restrict this...

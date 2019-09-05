@@ -1,0 +1,36 @@
+﻿// -----------------------------------------------------------------
+// <copyright file="LightLevels.cs" company="2Dudes">
+// Copyright (c) 2018 2Dudes. All rights reserved.
+// Licensed under the MIT license.
+// See LICENSE file in the project root for full license information.
+// </copyright>
+// -----------------------------------------------------------------
+
+namespace OpenTibia.Server.Contracts.Enumerations
+{
+    /// <summary>
+    /// Enumeration of the common light levels.
+    /// </summary>
+    public enum LightLevels : byte
+    {
+        /// <summary>
+        /// No light.
+        /// </summary>
+        None = 0,
+
+        /// <summary>
+        /// The level emitted by a brand-new torch.
+        /// </summary>
+        Torch = 7,
+
+        /// <summary>
+        /// The level considered as full.
+        /// </summary>
+        Full = 27,
+
+        /// <summary>
+        /// Daylight level.
+        /// </summary>
+        World = 255,
+    }
+}

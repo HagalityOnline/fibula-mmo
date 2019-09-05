@@ -14,20 +14,20 @@ namespace OpenTibia.Data.Models
     public class GuildMember : IGuildMember
     {
         [Key]
-        public int EntryId { get; set; }
+        public int EntryId { get; }
 
-        public int AccountId { get; set; }
+        public int AccountId { get; }
 
-        public short GuildId { get; set; }
+        public short GuildId { get; }
 
-        public string GuildTitle { get; set; }
+        public string GuildTitle { get; }
 
-        public string PlayerTitle { get; set; }
+        public string PlayerTitle { get; }
 
-        public byte Invitation { get; set; }
+        public byte Invitation { get; }
 
-        public int Timestamp { get; set; }
+        public int Timestamp { get; }
 
-        public byte Rank { get; set; }
+        public byte Rank { get; }
     }
 }

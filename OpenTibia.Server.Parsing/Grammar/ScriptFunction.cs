@@ -8,14 +8,19 @@ namespace OpenTibia.Server.Parsing.Grammar
 {
     public class ScriptFunction
     {
-        public string Name { get; }
-
-        public object[] Parameters { get; }
-
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ScriptFunction"/> class.
+        /// </summary>
+        /// <param name="name"></param>
+        /// <param name="parameters"></param>
         public ScriptFunction(string name, params object[] parameters)
         {
             this.Name = name;
             this.Parameters = parameters;
         }
+
+        public string Name { get; }
+
+        public object[] Parameters { get; }
     }
 }

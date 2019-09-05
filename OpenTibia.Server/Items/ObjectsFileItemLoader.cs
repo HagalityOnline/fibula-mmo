@@ -11,7 +11,8 @@ namespace OpenTibia.Server.Items
     using System.IO;
     using System.Linq;
     using System.Reflection;
-    using OpenTibia.Data.Contracts;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Server.Contracts.Abstractions;
     using OpenTibia.Server.Parsing;
 
     public class ObjectsFileItemLoader : IItemLoader
@@ -29,14 +30,11 @@ namespace OpenTibia.Server.Items
         public const char CommentSymbol = '#';
         public const char PropertyValueSeparator = '=';
 
-        public Dictionary<ushort, ItemType> Load(string objectsFileName)
+        public Dictionary<ushort, IItemType> Load(string objectsFileName)
         {
-            if (string.IsNullOrWhiteSpace(objectsFileName))
-            {
-                throw new ArgumentNullException(nameof(objectsFileName));
-            }
+            objectsFileName.ThrowIfNullOrWhiteSpace(nameof(objectsFileName));
 
-            var itemDictionary = new Dictionary<ushort, ItemType>();
+            var itemDictionary = new Dictionary<ushort, IItemType>();
             var objectsFilePath = "OpenTibia.Server.Data." + ServerConfiguration.DataFilesDirectory + "." + objectsFileName;
 
             var assembly = Assembly.GetExecutingAssembly();
@@ -101,11 +99,9 @@ namespace OpenTibia.Server.Items
                             case "flags":
                                 foreach (var element in CipParser.Parse(propData))
                                 {
-                                    ItemFlag flagMatch;
-
                                     var flagName = element.Attributes.FirstOrDefault()?.Name;
 
-                                    if (Enum.TryParse(flagName, out flagMatch))
+                                    if (Enum.TryParse(flagName, out ItemFlag flagMatch))
                                     {
                                         current.SetFlag(flagMatch);
                                     }

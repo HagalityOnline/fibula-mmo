@@ -14,12 +14,12 @@ namespace OpenTibia.Data.Models
     public class RandPlayer : IRandPlayer
     {
         [Key]
-        public int RandId { get; set; }
+        public int RandId { get; }
 
-        public int AccountId { get; set; }
+        public int AccountId { get; }
 
-        public int Order { get; set; }
+        public int Order { get; }
 
-        public int AssignedTo { get; set; }
+        public int AssignedTo { get; }
     }
 }

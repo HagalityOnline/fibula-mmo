@@ -6,7 +6,7 @@
 
 namespace OpenTibia.Server.Movement.EventConditions
 {
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Server.Contracts.Structs;
 
     /// <summary>
     /// Class that represents an event condition that evaluates whether two locations match.

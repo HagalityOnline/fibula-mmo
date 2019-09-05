@@ -9,10 +9,9 @@ namespace OpenTibia.Server.Events
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
     using OpenTibia.Server.Parsing.Grammar;
-    using OpenTibia.Server.Scripting;
 
     using Sprache;
 
@@ -21,6 +20,19 @@ namespace OpenTibia.Server.Events
         public const string IsTypeFunctionName = "IsType";
 
         private bool isSetup;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="BaseItemEvent"/> class.
+        /// </summary>
+        /// <param name="conditionSet"></param>
+        /// <param name="actionSet"></param>
+        public BaseItemEvent(IList<string> conditionSet, IList<string> actionSet)
+        {
+            this.Conditions = this.ParseFunctions(conditionSet);
+            this.Actions = this.ParseFunctions(actionSet);
+
+            this.isSetup = false;
+        }
 
         public abstract ItemEventType Type { get; }
 
@@ -42,12 +54,36 @@ namespace OpenTibia.Server.Events
             }
         }
 
-        public BaseItemEvent(IList<string> conditionSet, IList<string> actionSet)
+        public bool Setup(IThing obj1, IThing obj2 = null, IPlayer user = null)
         {
-            this.Conditions = this.ParseFunctions(conditionSet);
-            this.Actions = this.ParseFunctions(actionSet);
+            this.Obj1 = obj1;
+            this.Obj2 = obj2;
+            this.User = user;
 
-            this.isSetup = false;
+            this.isSetup = true;
+
+            return true; // TODO: make this abstract/virtual and let subclasses override.
+        }
+
+        public void Execute()
+        {
+            if (!this.isSetup)
+            {
+                throw new InvalidOperationException("Cannot execute event without first doing Setup.");
+            }
+
+            foreach (var action in this.Actions)
+            {
+                var obj1Result = this.Obj1;
+                var obj2Result = this.Obj2;
+                var userResult = this.User;
+
+                Functions.InvokeAction(ref obj1Result, ref obj2Result, ref userResult, action.FunctionName, action.Parameters);
+
+                this.Obj1 = obj1Result;
+                this.Obj2 = obj2Result;
+                this.User = userResult;
+            }
         }
 
         private IEnumerable<IItemEventFunction> ParseFunctions(IList<string> stringSet)
@@ -83,38 +119,6 @@ namespace OpenTibia.Server.Events
             }
 
             return functionList;
-        }
-
-        public bool Setup(IThing obj1, IThing obj2 = null, IPlayer user = null)
-        {
-            this.Obj1 = obj1;
-            this.Obj2 = obj2;
-            this.User = user;
-
-            this.isSetup = true;
-
-            return true; // TODO: make this abstract/virtual and let subclasses override.
-        }
-
-        public void Execute()
-        {
-            if (!this.isSetup)
-            {
-                throw new InvalidOperationException("Cannot execute event without first doing Setup.");
-            }
-
-            foreach (var action in this.Actions)
-            {
-                var obj1Result = this.Obj1;
-                var obj2Result = this.Obj2;
-                var userResult = this.User;
-
-                Functions.InvokeAction(ref obj1Result, ref obj2Result, ref userResult, action.FunctionName, action.Parameters);
-
-                this.Obj1 = obj1Result;
-                this.Obj2 = obj2Result;
-                this.User = userResult;
-            }
         }
     }
 }

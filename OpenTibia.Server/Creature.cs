@@ -9,31 +9,43 @@ namespace OpenTibia.Server
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Server.Contracts;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Structs;
 
-    public abstract class Creature : Thing, ICreature, ICombatActor
+    public abstract class Creature : Thing, ICreature
     {
         private static readonly object IdLock = new object();
         private static uint idCounter = 1;
 
         private readonly object enqueueWalkLock;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Creature"/> class.
+        /// </summary>
+        /// <param name="gameInstance"></param>
+        /// <param name="id"></param>
+        /// <param name="name"></param>
+        /// <param name="article"></param>
+        /// <param name="maxHitpoints"></param>
+        /// <param name="maxManapoints"></param>
+        /// <param name="corpse"></param>
+        /// <param name="hitpoints"></param>
+        /// <param name="manapoints"></param>
         protected Creature(
+            IGame gameInstance,
             uint id,
             string name,
             string article,
-            uint maxHitpoints,
-            uint maxManapoints,
+            ushort maxHitpoints,
+            ushort maxManapoints,
             ushort corpse = 0,
             ushort hitpoints = 0,
             ushort manapoints = 0)
         {
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                throw new ArgumentNullException(nameof(name));
-            }
+            name.ThrowIfNullOrWhiteSpace(nameof(name));
 
             if (maxHitpoints == 0)
             {
@@ -42,7 +54,8 @@ namespace OpenTibia.Server
 
             this.enqueueWalkLock = new object();
 
-            this.CreatureId = id;
+            this.Game = gameInstance;
+            this.Id = id;
             this.Name = name;
             this.Article = article;
             this.MaxHitpoints = maxHitpoints;
@@ -51,18 +64,18 @@ namespace OpenTibia.Server
             this.Manapoints = Math.Min(this.MaxManapoints, manapoints);
             this.Corpse = corpse;
 
-            this.Cooldowns = new Dictionary<CooldownType, Tuple<DateTime, TimeSpan>>
+            this.Cooldowns = new Dictionary<ExhaustionType, Tuple<DateTimeOffset, TimeSpan>>
             {
-                { CooldownType.Move, new Tuple<DateTime, TimeSpan>(DateTime.Now, TimeSpan.Zero) },
-                { CooldownType.Action, new Tuple<DateTime, TimeSpan>(DateTime.Now, TimeSpan.Zero) },
-                { CooldownType.Combat, new Tuple<DateTime, TimeSpan>(DateTime.Now, TimeSpan.Zero) },
-                { CooldownType.Talk, new Tuple<DateTime, TimeSpan>(DateTime.Now, TimeSpan.Zero) }
+                { ExhaustionType.Move, new Tuple<DateTimeOffset, TimeSpan>(DateTimeOffset.UtcNow, TimeSpan.Zero) },
+                { ExhaustionType.Action, new Tuple<DateTimeOffset, TimeSpan>(DateTimeOffset.UtcNow, TimeSpan.Zero) },
+                { ExhaustionType.Combat, new Tuple<DateTimeOffset, TimeSpan>(DateTimeOffset.UtcNow, TimeSpan.Zero) },
+                { ExhaustionType.Talk, new Tuple<DateTimeOffset, TimeSpan>(DateTimeOffset.UtcNow, TimeSpan.Zero) },
             };
 
             this.Outfit = new Outfit
             {
                 Id = 0,
-                LikeType = 0
+                LikeType = 0,
             };
 
             this.Speed = 220;
@@ -89,9 +102,9 @@ namespace OpenTibia.Server
 
         public override string CloseInspectionText => this.InspectionText;
 
-        public uint ActorId => this.CreatureId;
+        public Guid ActorId => this.Id;
 
-        public uint CreatureId { get; }
+        public Guid Id { get; }
 
         public string Article { get; }
 
@@ -99,13 +112,13 @@ namespace OpenTibia.Server
 
         public ushort Corpse { get; }
 
-        public uint Hitpoints { get; }
+        public ushort Hitpoints { get; }
 
-        public uint MaxHitpoints { get; }
+        public ushort MaxHitpoints { get; }
 
-        public uint Manapoints { get; }
+        public ushort Manapoints { get; }
 
-        public uint MaxManapoints { get; }
+        public ushort MaxManapoints { get; }
 
         public decimal CarryStrength { get; protected set; }
 
@@ -164,15 +177,15 @@ namespace OpenTibia.Server
 
         public decimal BaseDefenseSpeed { get; }
 
-        public TimeSpan CombatCooldownTimeRemaining => this.CalculateRemainingCooldownTime(CooldownType.Combat, Game.Instance.CombatSynchronizationTime);
+        public TimeSpan CombatCooldownTimeRemaining => this.CalculateRemainingCooldownTime(ExhaustionType.Combat, this.Game.CombatSynchronizationTime);
 
-        public DateTime LastAttackTime => this.Cooldowns[CooldownType.Combat].Item1;
+        public DateTimeOffset LastAttackTime => this.Cooldowns[ExhaustionType.Combat].Item1;
 
-        public TimeSpan LastAttackCost => this.Cooldowns[CooldownType.Combat].Item2;
+        public TimeSpan LastAttackCost => this.Cooldowns[ExhaustionType.Combat].Item2;
 
         public IDictionary<SkillType, ISkill> Skills { get; }
 
-        public IDictionary<CooldownType, Tuple<DateTime, TimeSpan>> Cooldowns { get; }
+        public IDictionary<ExhaustionType, Tuple<DateTimeOffset, TimeSpan>> Cooldowns { get; }
 
         // public IList<Condition> Conditions { get; protected set; } // TODO: implement.
         public bool IsInvisible { get; protected set; } // TODO: implement.
@@ -192,6 +205,8 @@ namespace OpenTibia.Server
         public HashSet<uint> Friendly { get; }
 
         public abstract IInventory Inventory { get; protected set; }
+
+        protected IGame Game { get; }
 
         public static uint GetNewId()
         {
@@ -287,7 +302,7 @@ namespace OpenTibia.Server
 
         public void SetAttackTarget(uint targetId)
         {
-            if (targetId == this.CreatureId || this.AutoAttackTargetId == targetId)
+            if (targetId == this.Id || this.AutoAttackTargetId == targetId)
             {
                 // if we want to attack ourselves or if the current target is already the one we want... no change needed.
                 return;
@@ -301,7 +316,7 @@ namespace OpenTibia.Server
                 // clearing our target.
                 if (this.AutoAttackTargetId != 0)
                 {
-                    var attackTarget = Game.Instance.GetCreatureWithId(this.AutoAttackTargetId);
+                    var attackTarget = this.Game.GetCreatureWithId(this.AutoAttackTargetId);
 
                     if (attackTarget != null)
                     {
@@ -318,7 +333,7 @@ namespace OpenTibia.Server
                 // {
                 this.AutoAttackTargetId = targetId;
 
-                var attackTarget = Game.Instance.GetCreatureWithId(this.AutoAttackTargetId);
+                var attackTarget = this.Game.GetCreatureWithId(this.AutoAttackTargetId);
 
                 if (attackTarget != null)
                 {
@@ -339,7 +354,7 @@ namespace OpenTibia.Server
 
         public void UpdateLastAttack(TimeSpan exahust)
         {
-            this.Cooldowns[CooldownType.Combat] = new Tuple<DateTime, TimeSpan>(Game.Instance.CombatSynchronizationTime, exahust);
+            this.Cooldowns[ExhaustionType.Combat] = new Tuple<DateTimeOffset, TimeSpan>(this.Game.CombatSynchronizationTime, exahust);
         }
 
         public void CheckAutoAttack(IThing thingChanged, ThingStateChangedEventArgs eventAgrs)
@@ -349,9 +364,9 @@ namespace OpenTibia.Server
                 return;
             }
 
-            var attackTarget = Game.Instance.GetCreatureWithId(this.AutoAttackTargetId);
+            var attackTarget = this.Game.GetCreatureWithId(this.AutoAttackTargetId);
 
-            if (attackTarget == null || (thingChanged != this && thingChanged != attackTarget) || eventAgrs.PropertyChanged != nameof(Thing.Location))
+            if (attackTarget == null || (thingChanged != this && thingChanged != attackTarget) || eventAgrs.PropertyChanged != nameof(this.Location))
             {
                 return;
             }
@@ -361,7 +376,7 @@ namespace OpenTibia.Server
 
             if (inRange)
             {
-                Game.Instance.SignalAttackReady();
+                this.Game.SignalAttackReady();
             }
         }
 
@@ -390,11 +405,11 @@ namespace OpenTibia.Server
                     this.WalkingQueue.Enqueue(new Tuple<byte, Direction>((byte)(nextStepId++ % byte.MaxValue), direction));
                 }
 
-                Game.Instance.SignalWalkAvailable();
+                this.Game.SignalWalkAvailable();
             }
         }
 
-        public TimeSpan CalculateRemainingCooldownTime(CooldownType type, DateTime currentTime)
+        public TimeSpan CalculateRemainingCooldownTime(ExhaustionType type, DateTimeOffset currentTime)
         {
             TimeSpan timeDiff = TimeSpan.Zero;
 
@@ -415,7 +430,7 @@ namespace OpenTibia.Server
             var tilePenalty = this.Tile?.Ground?.MovementPenalty;
             var totalPenalty = (tilePenalty ?? 200) * (wasDiagonal ? 2 : 1);
 
-            this.Cooldowns[CooldownType.Move] = new Tuple<DateTime, TimeSpan>(DateTime.Now, TimeSpan.FromMilliseconds(1000 * totalPenalty / (double)Math.Max(1, (int)this.Speed)));
+            this.Cooldowns[ExhaustionType.Move] = new Tuple<DateTimeOffset, TimeSpan>(DateTimeOffset.UtcNow, TimeSpan.FromMilliseconds(1000 * totalPenalty / (double)Math.Max(1, (int)this.Speed)));
 
             this.NextStepId = (byte)(lastStepId + 1);
         }

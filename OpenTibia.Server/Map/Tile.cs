@@ -9,9 +9,12 @@ namespace OpenTibia.Server.Map
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using System.Text;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Communications.Contracts.Enumerations;
+    using OpenTibia.Data.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Items;
     using OpenTibia.Server.Parsing;
 
@@ -24,8 +27,6 @@ namespace OpenTibia.Server.Map
         private readonly Stack<IItem> topItems2OnTile;
 
         private readonly Stack<IItem> downItemsOnTile;
-
-        private byte[] cachedDescription;
 
         public Location Location { get; }
 
@@ -41,7 +42,7 @@ namespace OpenTibia.Server.Map
 
         public IEnumerable<IItem> DownItems => this.downItemsOnTile;
 
-        public bool HandlesCollision
+        public bool HasCollisionEvents
         {
             get
             {
@@ -68,7 +69,7 @@ namespace OpenTibia.Server.Map
             }
         }
 
-        public bool HandlesSeparation
+        public bool HasSeparationEvents
         {
             get
             {
@@ -118,19 +119,6 @@ namespace OpenTibia.Server.Map
             get
             {
                 return (this.Ground != null && this.Ground.BlocksLay) || this.TopItems1.Any(i => i.BlocksLay) || this.TopItems2.Any(i => i.BlocksLay) || this.DownItems.Any(i => i.BlocksLay);
-            }
-        }
-
-        public byte[] CachedDescription
-        {
-            get
-            {
-                if (this.cachedDescription == null)
-                {
-                    this.cachedDescription = this.GetItemDescriptionBytes();
-                }
-
-                return this.cachedDescription;
             }
         }
 
@@ -236,8 +224,7 @@ namespace OpenTibia.Server.Map
                 throw new ArgumentException("Invalid count zero.", nameof(count));
             }
 
-            var creature = thing as Creature;
-            var creaturesCheck = creature != null && this.creatureIdsOnTile.Contains(creature.CreatureId);
+            var creaturesCheck = thing is Creature creature && this.creatureIdsOnTile.Contains(creature.Id);
 
             var top1Check = thing is Item && this.topItems1OnTile.Count > 0 && this.topItems1OnTile.Peek() == thing && thing.Count >= count;
             var top2Check = thing is Item && this.topItems2OnTile.Count > 0 && this.topItems2OnTile.Peek() == thing && thing.Count >= count;
@@ -249,11 +236,21 @@ namespace OpenTibia.Server.Map
         // public static HashSet<string> PropSet = new HashSet<string>();
 
         // public string LoadedFrom { get; set; }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Tile"/> class.
+        /// </summary>
+        /// <param name="x"></param>
+        /// <param name="y"></param>
+        /// <param name="z"></param>
         public Tile(ushort x, ushort y, sbyte z)
             : this(new Location { X = x, Y = y, Z = z })
         {
         }
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Tile"/> class.
+        /// </summary>
+        /// <param name="loc"></param>
         public Tile(Location loc)
         {
             this.Location = loc;
@@ -270,19 +267,16 @@ namespace OpenTibia.Server.Map
                 throw new ArgumentException("Invalid count zero.");
             }
 
-            var creature = thing as Creature;
-            var item = thing as Item;
-
-            if (creature != null)
+            if (thing is Creature creature)
             {
-                this.creatureIdsOnTile.Push(creature.CreatureId);
+                this.creatureIdsOnTile.Push(creature.Id);
                 creature.Tile = this;
                 creature.Added();
-                
+
                 // invalidate the cache.
                 this.cachedDescription = null;
             }
-            else if (item != null)
+            else if (thing is Item item)
             {
                 if (item.IsGround)
                 {
@@ -351,16 +345,13 @@ namespace OpenTibia.Server.Map
                 throw new ArgumentException("Invalid count zero.");
             }
 
-            var creature = thing as Creature;
-            var item = thing as Item;
-
-            if (creature != null)
+            if (thing is Creature creature)
             {
                 this.RemoveCreature(creature);
                 creature.Tile = null;
                 creature.Removed();
             }
-            else if (item != null)
+            else if (thing is Item item)
             {
                 var removeItem = true;
 
@@ -431,7 +422,7 @@ namespace OpenTibia.Server.Map
                 {
                     var temp = this.creatureIdsOnTile.Pop();
 
-                    if (c.CreatureId == temp)
+                    if (c.Id == temp)
                     {
                         removed = c;
                     }
@@ -485,9 +476,7 @@ namespace OpenTibia.Server.Map
 
         public void AddContent(object contentObj)
         {
-            var content = contentObj as IEnumerable<CipElement>;
-
-            if (content == null)
+            if (!(contentObj is IEnumerable<CipElement> content))
             {
                 return;
             }
@@ -727,10 +716,7 @@ namespace OpenTibia.Server.Map
 
         public byte GetStackPosition(IThing thing)
         {
-            if (thing == null)
-            {
-                throw new ArgumentNullException(nameof(thing));
-            }
+            thing.ThrowIfNull(nameof(thing));
 
             if (this.Ground != null && thing == this.Ground)
             {
@@ -761,8 +747,7 @@ namespace OpenTibia.Server.Map
             {
                 ++n;
 
-                var creature = thing as ICreature;
-                if (creature != null && creature.CreatureId == creatureId)
+                if (thing is ICreature creature && creature.Id == creatureId)
                 {
                     return (byte)n;
                 }
@@ -784,6 +769,152 @@ namespace OpenTibia.Server.Map
         public void SetFlag(TileFlag flag)
         {
             this.Flags |= (byte)flag;
+        }
+
+        public IEnumerable<byte> GetDescription(IPlayer asPlayer)
+        {
+            var tempBytes = new List<byte>();
+
+            var count = 0;
+            const int numberOfObjectsLimit = 9;
+
+            if (this.Ground != null)
+            {
+                tempBytes.AddRange(BitConverter.GetBytes(this.Ground.Type.ClientId));
+                count++;
+            }
+
+            foreach (var item in this.TopItems1)
+            {
+                if (count == numberOfObjectsLimit)
+                {
+                    break;
+                }
+
+                tempBytes.AddRange(BitConverter.GetBytes(item.Type.ClientId));
+
+                if (item.IsCumulative)
+                {
+                    tempBytes.Add(item.Amount);
+                }
+                else if (item.IsLiquidPool || item.IsLiquidContainer)
+                {
+                    tempBytes.Add(item.LiquidType);
+                }
+
+                count++;
+            }
+
+            foreach (var item in this.TopItems2)
+            {
+                if (count == numberOfObjectsLimit)
+                {
+                    break;
+                }
+
+                tempBytes.AddRange(BitConverter.GetBytes(item.Type.ClientId));
+
+                if (item.IsCumulative)
+                {
+                    tempBytes.Add(item.Amount);
+                }
+                else if (item.IsLiquidPool || item.IsLiquidContainer)
+                {
+                    tempBytes.Add(item.LiquidType);
+                }
+
+                count++;
+            }
+
+            foreach (var creatureId in this.CreatureIds)
+            {
+                var creature = Game.Instance.GetCreatureWithId(creatureId);
+
+                if (creature == null)
+                {
+                    continue;
+                }
+
+                if (count == numberOfObjectsLimit)
+                {
+                    break;
+                }
+
+                if (asPlayer.KnowsCreatureWithId(creatureId))
+                {
+                    tempBytes.AddRange(BitConverter.GetBytes((ushort)OutgoingGamePacketType.AddKnownCreature));
+                    tempBytes.AddRange(BitConverter.GetBytes(creatureId));
+                }
+                else
+                {
+                    tempBytes.AddRange(BitConverter.GetBytes((ushort)OutgoingGamePacketType.AddUnknownCreature));
+                    tempBytes.AddRange(BitConverter.GetBytes(asPlayer.ChooseToRemoveFromKnownSet()));
+                    tempBytes.AddRange(BitConverter.GetBytes(creatureId));
+
+                    asPlayer.AddKnownCreature(creatureId);
+
+                    var creatureNameBytes = Encoding.Default.GetBytes(creature.Name);
+                    tempBytes.AddRange(BitConverter.GetBytes((ushort)creatureNameBytes.Length));
+                    tempBytes.AddRange(creatureNameBytes);
+                }
+
+                tempBytes.Add((byte)Math.Min(100, creature.Hitpoints * 100 / creature.MaxHitpoints));
+                tempBytes.Add((byte)creature.ClientSafeDirection);
+
+                if (asPlayer.CanSee(creature))
+                {
+                    // Add creature outfit
+                    tempBytes.AddRange(BitConverter.GetBytes(creature.Outfit.Id));
+
+                    if (creature.Outfit.Id > 0)
+                    {
+                        tempBytes.Add(creature.Outfit.Head);
+                        tempBytes.Add(creature.Outfit.Body);
+                        tempBytes.Add(creature.Outfit.Legs);
+                        tempBytes.Add(creature.Outfit.Feet);
+                    }
+                    else
+                    {
+                        tempBytes.AddRange(BitConverter.GetBytes(creature.Outfit.LikeType));
+                    }
+                }
+                else
+                {
+                    tempBytes.AddRange(BitConverter.GetBytes((ushort)0));
+                    tempBytes.AddRange(BitConverter.GetBytes((ushort)0));
+                }
+
+                tempBytes.Add(creature.LightBrightness);
+                tempBytes.Add(creature.LightColor);
+
+                tempBytes.AddRange(BitConverter.GetBytes(creature.Speed));
+
+                tempBytes.Add(creature.Skull);
+                tempBytes.Add(creature.Shield);
+            }
+
+            foreach (var item in this.DownItems)
+            {
+                if (count == numberOfObjectsLimit)
+                {
+                    break;
+                }
+
+                tempBytes.AddRange(BitConverter.GetBytes(item.Type.ClientId));
+
+                if (item.IsCumulative)
+                {
+                    tempBytes.Add(item.Amount);
+                }
+                else if (item.IsLiquidPool || item.IsLiquidContainer)
+                {
+                    tempBytes.Add(item.LiquidType);
+                }
+
+                count++;
+            }
+
+            return tempBytes;
         }
 
         // public FloorChangeDirection FloorChange

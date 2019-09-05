@@ -9,10 +9,10 @@ namespace OpenTibia.Server
     using System;
     using System.Collections.Generic;
     using System.Linq;
-    using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Items;
     using OpenTibia.Server.Notifications;
 
@@ -20,6 +20,18 @@ namespace OpenTibia.Server
     // public delegate void OnUnsetInventoryItem(Slot slot);
     internal class PlayerInventory : IInventory
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="PlayerInventory"/> class.
+        /// </summary>
+        /// <param name="owner"></param>
+        public PlayerInventory(ICreature owner)
+        {
+            owner.ThrowIfNull(nameof(owner));
+
+            this.Owner = owner;
+            this.Inventory = new Dictionary<Slot, Tuple<IItem, ushort>>();
+        }
+
         private Dictionary<Slot, Tuple<IItem, ushort>> Inventory { get; }
 
         public byte TotalAttack => (byte)Math.Max(this.Inventory.ContainsKey(Slot.Left) ? this.Inventory[Slot.Left].Item1.Attack : 0, this.Inventory.ContainsKey(Slot.Right) ? this.Inventory[Slot.Right].Item1.Attack : 0);
@@ -46,21 +58,10 @@ namespace OpenTibia.Server
         public byte AttackRange => (byte)Math.Max(
             Math.Max(
             this.Inventory.ContainsKey(Slot.Left) ? this.Inventory[Slot.Left].Item1.Range : 0,
-                this.Inventory.ContainsKey(Slot.Right) ? this.Inventory[Slot.Right].Item1.Range : 0),
+            this.Inventory.ContainsKey(Slot.Right) ? this.Inventory[Slot.Right].Item1.Range : 0),
             this.Inventory.ContainsKey(Slot.TwoHanded) ? this.Inventory[Slot.TwoHanded].Item1.Range : 0);
 
         public ICreature Owner { get; }
-
-        public PlayerInventory(ICreature owner)
-        {
-            if (owner == null)
-            {
-                throw new ArgumentNullException(nameof(owner));
-            }
-
-            this.Owner = owner;
-            this.Inventory = new Dictionary<Slot, Tuple<IItem, ushort>>();
-        }
 
         public IItem this[byte slot] => !this.Inventory.ContainsKey((Slot)slot) ? null : this.Inventory[(Slot)slot].Item1;
 
@@ -111,7 +112,7 @@ namespace OpenTibia.Server
                     else
                     {
                         extraItem = current.Item1;
-                        extraItem.SetHolder(null, default(Location));
+                        extraItem.SetHolder(null, default);
                     }
                 }
             }
@@ -153,7 +154,7 @@ namespace OpenTibia.Server
                 if (found.Count == count)
                 {
                     this.Inventory.Remove((Slot)positionByte);
-                    found.SetHolder(null, default(Location));
+                    found.SetHolder(null, default);
 
                     // update the slot.
                     Game.Instance.NotifySinglePlayer(
@@ -178,6 +179,7 @@ namespace OpenTibia.Server
                         new InventorySetSlotPacket { Slot = (Slot)positionByte, Item = found }));
 
                 wasPartial = true;
+
                 return newItem;
             }
 
@@ -190,7 +192,7 @@ namespace OpenTibia.Server
 
             var slot = this.Inventory.Keys.FirstOrDefault(k => this.Inventory[k].Item1.Type.TypeId == itemId);
 
-            if (slot != default(Slot))
+            if (slot != default)
             {
                 var found = this.Inventory[slot].Item1;
 
@@ -203,7 +205,7 @@ namespace OpenTibia.Server
                 if (found.Count == count)
                 {
                     this.Inventory.Remove(slot);
-                    found.SetHolder(null, default(Location));
+                    found.SetHolder(null, default);
 
                     // update the slot.
                     Game.Instance.NotifySinglePlayer(
@@ -228,6 +230,7 @@ namespace OpenTibia.Server
                         new InventorySetSlotPacket { Slot = slot, Item = found }));
 
                 wasPartial = true;
+
                 return newItem;
             }
 

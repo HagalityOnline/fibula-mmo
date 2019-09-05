@@ -8,16 +8,23 @@ namespace OpenTibia.Server.Movement
 {
     using System;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Events;
     using OpenTibia.Server.Movement.EventConditions;
     using OpenTibia.Server.Notifications;
 
-    internal class ThingMovementSlotToContainer : MovementBase
+    internal class ThingMovementSlotToContainer : BaseMovementEvent
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ThingMovementSlotToContainer"/> class.
+        /// </summary>
+        /// <param name="requestorId"></param>
+        /// <param name="thingMoving"></param>
+        /// <param name="fromLocation"></param>
+        /// <param name="toLocation"></param>
+        /// <param name="count"></param>
         public ThingMovementSlotToContainer(uint requestorId, IThing thingMoving, Location fromLocation, Location toLocation, byte count = 1)
             : base(requestorId, EvaluationTime.OnExecute)
         {
@@ -69,10 +76,8 @@ namespace OpenTibia.Server.Movement
                 return;
             }
 
-            bool partialRemove;
-
             // attempt to remove the item from the inventory
-            var movingItem = this.Requestor.Inventory?.Remove(this.FromSlot, this.Count, out partialRemove);
+            var movingItem = this.Requestor.Inventory?.Remove(this.FromSlot, this.Count, out bool partialRemove);
 
             if (movingItem == null)
             {
@@ -98,7 +103,7 @@ namespace OpenTibia.Server.Movement
                 Game.Instance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, this.Requestor.Location, Game.Instance.GetMapTileDescription(conn.PlayerId, this.Requestor.Location)), this.Requestor.Location);
 
                 // call any collision events again.
-                if (this.Requestor.Tile.HandlesCollision)
+                if (this.Requestor.Tile.HasCollisionEvents)
                 {
                     foreach (var itemWithCollision in this.Requestor.Tile.ItemsWithCollision)
                     {

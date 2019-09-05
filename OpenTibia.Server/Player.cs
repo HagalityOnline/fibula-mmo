@@ -10,96 +10,34 @@ namespace OpenTibia.Server
     using System.Collections.Generic;
     using System.Linq;
     using System.Threading.Tasks;
-    using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Communications.Contracts.Abstractions;
+    using OpenTibia.Data.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Structs;
+    using OpenTibia.Server.Models;
     using OpenTibia.Server.Notifications;
 
     public class Player : Creature, IPlayer
     {
-        const int KnownCreatureLimit = 100; // TODO: not sure of the number for this version... debugs will tell :|
-
-        public override bool CanBeMoved => this.AccessLevel == 0;
-
-        public override string InspectionText => this.Name;
-
-        public override string CloseInspectionText => this.InspectionText;
-
-        public ushort Level => this.Skills[SkillType.Level].Level;
-
-        public byte LevelPercent => (byte)Math.Min(100, this.Skills[SkillType.Level].Count * 100 / (this.Skills[SkillType.Level].Target + 1));
-
-        public uint Experience => (uint)this.Skills[SkillType.Level].Count;
-
-        public byte AccessLevel { get; set; } // TODO: implement.
-
-        public byte SoulPoints { get; } // TODO: nobody likes soulpoints... figure out what to do with them :)
-
-        public IAction PendingAction { get; private set; }
-
-        public bool CanLogout => this.AutoAttackTargetId == 0;
-
-        private Dictionary<uint, long> KnownCreatures { get; }
-
-        private Dictionary<string, bool> VipList { get; }
-
-        public Location LocationInFront
-        {
-            get
-            {
-                switch (this.Direction)
-                {
-                    case Direction.North:
-                        return new Location
-                        {
-                            X = this.Location.X,
-                            Y = this.Location.Y - 1,
-                            Z = this.Location.Z
-                        };
-                    case Direction.East:
-                        return new Location
-                        {
-                            X = this.Location.X + 1,
-                            Y = this.Location.Y,
-                            Z = this.Location.Z
-                        };
-                    case Direction.West:
-                        return new Location
-                        {
-                            X = this.Location.X - 1,
-                            Y = this.Location.Y,
-                            Z = this.Location.Z
-                        };
-                    case Direction.South:
-                        return new Location
-                        {
-                            X = this.Location.X,
-                            Y = this.Location.Y + 1,
-                            Z = this.Location.Z
-                        };
-                    default:
-                        return this.Location; // should not happen.
-                }
-            }
-        }
-
-        public override ushort AttackPower => this.Inventory.TotalAttack;
-
-        public override ushort ArmorRating => this.Inventory.TotalArmor;
-
-        public override ushort DefensePower => this.Inventory.TotalDefense;
-
-        public override byte AutoAttackRange => Math.Max((byte)1, this.Inventory.AttackRange);
-
-        public sealed override IInventory Inventory { get; protected set; }
-
-        private IContainer[] OpenContainers { get; }
+        private const int KnownCreatureLimit = 100; // TODO: not sure of the number for this version... debugs will tell :|
 
         private const sbyte MaxContainers = 16;
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Player"/> class.
+        /// </summary>
+        /// <param name="gameInstance"></param>
+        /// <param name="id"></param>
+        /// <param name="name"></param>
+        /// <param name="maxHitpoints"></param>
+        /// <param name="maxManapoints"></param>
+        /// <param name="corpse"></param>
+        /// <param name="hitpoints"></param>
+        /// <param name="manapoints"></param>
         public Player(
+            IGame gameInstance,
             uint id,
             string name,
             ushort maxHitpoints,
@@ -107,7 +45,7 @@ namespace OpenTibia.Server
             ushort corpse,
             ushort hitpoints = 0,
             ushort manapoints = 0)
-            : base(id, name, string.Empty, maxHitpoints, maxManapoints, corpse, hitpoints, manapoints)
+            : base(gameInstance, id, name, string.Empty, maxHitpoints, maxManapoints, corpse, hitpoints, manapoints)
         {
             // TODO: implement, Temp values
             this.Speed = 420;
@@ -118,7 +56,7 @@ namespace OpenTibia.Server
                 Head = 114,
                 Body = 114,
                 Legs = 114,
-                Feet = 114
+                Feet = 114,
             };
 
             this.LightBrightness = (byte)LightLevels.Torch;
@@ -149,6 +87,83 @@ namespace OpenTibia.Server
         // {
         //    OnLocationChanged -= CheckInventoryContainerProximity;
         // }
+
+        public override bool CanBeMoved => this.AccessLevel == 0;
+
+        public override string InspectionText => this.Name;
+
+        public override string CloseInspectionText => this.InspectionText;
+
+        public ushort Level => this.Skills[SkillType.Level].Level;
+
+        public byte LevelPercent => (byte)Math.Min(100, this.Skills[SkillType.Level].Count * 100 / (this.Skills[SkillType.Level].Target + 1));
+
+        public uint Experience => (uint)this.Skills[SkillType.Level].Count;
+
+        public byte AccessLevel { get; set; } // TODO: implement.
+
+        public byte SoulPoints { get; } // TODO: nobody likes soulpoints... figure out what to do with them :)
+
+        public IAction PendingAction { get; private set; }
+
+        public bool CanLogout => this.AutoAttackTargetId == 0;
+
+        private IDictionary<uint, long> KnownCreatures { get; }
+
+        private IDictionary<string, bool> VipList { get; }
+
+        public Location LocationInFront
+        {
+            get
+            {
+                switch (this.Direction)
+                {
+                    case Direction.North:
+                        return new Location
+                        {
+                            X = this.Location.X,
+                            Y = this.Location.Y - 1,
+                            Z = this.Location.Z,
+                        };
+                    case Direction.East:
+                        return new Location
+                        {
+                            X = this.Location.X + 1,
+                            Y = this.Location.Y,
+                            Z = this.Location.Z,
+                        };
+                    case Direction.West:
+                        return new Location
+                        {
+                            X = this.Location.X - 1,
+                            Y = this.Location.Y,
+                            Z = this.Location.Z,
+                        };
+                    case Direction.South:
+                        return new Location
+                        {
+                            X = this.Location.X,
+                            Y = this.Location.Y + 1,
+                            Z = this.Location.Z,
+                        };
+                    default:
+                        return this.Location; // should not happen.
+                }
+            }
+        }
+
+        public override ushort AttackPower => this.Inventory.TotalAttack;
+
+        public override ushort ArmorRating => this.Inventory.TotalArmor;
+
+        public override ushort DefensePower => this.Inventory.TotalDefense;
+
+        public override byte AutoAttackRange => Math.Max((byte)1, this.Inventory.AttackRange);
+
+        public sealed override IInventory Inventory { get; protected set; }
+
+        private IContainer[] OpenContainers { get; }
+
         public byte GetSkillInfo(SkillType skill)
         {
             return (byte)this.Skills[skill].Level;
@@ -168,7 +183,7 @@ namespace OpenTibia.Server
         {
             try
             {
-                this.KnownCreatures[creatureId] = DateTime.Now.Ticks;
+                this.KnownCreatures[creatureId] = DateTimeOffset.UtcNow.Ticks;
             }
             catch
             {
@@ -181,7 +196,8 @@ namespace OpenTibia.Server
             // if the buffer is full we need to choose a vitim.
             while (this.KnownCreatures.Count == KnownCreatureLimit)
             {
-                foreach (var candidate in this.KnownCreatures.OrderBy(kvp => kvp.Value).ToList()) // .ToList() prevents modifiying an enumerating collection in the rare case we hit an exception down there.
+                // .ToList() prevents modifiying an enumerating collection in the rare case we hit an exception down there.
+                foreach (var candidate in this.KnownCreatures.OrderBy(kvp => kvp.Value).ToList())
                 {
                     try
                     {
@@ -207,10 +223,7 @@ namespace OpenTibia.Server
 
         public void SetPendingAction(IAction action)
         {
-            if (action == null)
-            {
-                throw new ArgumentNullException(nameof(action));
-            }
+            action.ThrowIfNull(nameof(action));
 
             this.PendingAction = action;
         }
@@ -229,7 +242,7 @@ namespace OpenTibia.Server
 
             if (this.Location == this.PendingAction.RetryLocation)
             {
-                Task.Delay(this.CalculateRemainingCooldownTime(CooldownType.Action, DateTime.Now) + TimeSpan.FromMilliseconds(500))
+                Task.Delay(this.CalculateRemainingCooldownTime(ExhaustionType.Action, DateTimeOffset.UtcNow) + TimeSpan.FromMilliseconds(500))
                     .ContinueWith(previous =>
                     {
                         this.PendingAction.Perform();
@@ -254,7 +267,7 @@ namespace OpenTibia.Server
         {
             try
             {
-                this.OpenContainers[openContainerId].Close(this.CreatureId);
+                this.OpenContainers[openContainerId].Close(this.Id);
                 this.OpenContainers[openContainerId] = null;
             }
             catch
@@ -265,10 +278,7 @@ namespace OpenTibia.Server
 
         public sbyte OpenContainer(IContainer container)
         {
-            if (container == null)
-            {
-                throw new ArgumentNullException(nameof(container));
-            }
+            container.ThrowIfNull(nameof(container));
 
             for (byte i = 0; i < this.OpenContainers.Length; i++)
             {
@@ -278,7 +288,7 @@ namespace OpenTibia.Server
                 }
 
                 this.OpenContainers[i] = container;
-                this.OpenContainers[i].Open(this.CreatureId, i);
+                this.OpenContainers[i].Open(this.Id, i);
 
                 return (sbyte)i;
             }
@@ -292,9 +302,9 @@ namespace OpenTibia.Server
 
         public void OpenContainerAt(IContainer thingAsContainer, byte index)
         {
-            this.OpenContainers[index]?.Close(this.CreatureId);
+            this.OpenContainers[index]?.Close(this.Id);
             this.OpenContainers[index] = thingAsContainer;
-            this.OpenContainers[index].Open(this.CreatureId, index);
+            this.OpenContainers[index].Open(this.Id, index);
         }
 
         public IContainer GetContainer(byte index)
@@ -303,7 +313,7 @@ namespace OpenTibia.Server
             {
                 var container = this.OpenContainers[index];
 
-                container.Open(this.CreatureId, index);
+                container.Open(this.Id, index);
 
                 return container;
             }
@@ -341,9 +351,7 @@ namespace OpenTibia.Server
                                 container.OnThingChanged -= this.CheckInventoryContainerProximity;
                             }
 
-                            var containerId = i;
-
-                            Game.Instance.NotifySinglePlayer(this, conn => new GenericNotification(conn, new ContainerClosePacket { ContainerId = containerId }));
+                            this.Game.NotifySinglePlayer(this, conn => new GenericNotification(conn, new ContainerClosePacket { ContainerId = i }));
                         }
 
                         break;
@@ -353,6 +361,27 @@ namespace OpenTibia.Server
                         break;
                 }
             }
+        }
+
+        public bool AttemptLogout()
+        {
+            if (!this.CanLogout)
+            {
+                return false;
+            }
+
+            // TODO: stuff missing?
+            var oldStackpos = this.Tile.GetStackPosition(this);
+
+            IThing playerThing = this;
+
+            this.Tile.RemoveThing(ref playerThing);
+
+            this.Game.NotifySpectatingPlayers(conn => new CreatureRemovedNotification(conn, player, oldStackpos, AnimatedEffect.Puff), this.Location);
+
+            this.Game.Creatures.TryRemove(this.Id, out ICreature creature);
+
+            return this.Game.Connections.TryRemove(this.Id, out IConnection connection);
         }
     }
 }

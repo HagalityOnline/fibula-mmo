@@ -7,8 +7,9 @@
 namespace OpenTibia.Server
 {
     using OpenTibia.Scheduling;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Scheduling.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Abstractions;
 
     /// <summary>
     /// Class that represents a generic event.
@@ -23,7 +24,7 @@ namespace OpenTibia.Server
         /// <param name="onSuccessActions">The actions to run if the event passes conditions.</param>
         /// <param name="onFailActions">The actions to run if the event fails to pass conditions.</param>
         /// <param name="evaluationTime">Optional. The time on which the event's conditions should be evaluated. Default is <see cref="EvaluationTime.OnBoth"/>.</param>
-        public GenericEvent(uint requestorId, IEventCondition [] conditions, IEventAction [] onSuccessActions, IEventAction[] onFailActions, EvaluationTime evaluationTime = EvaluationTime.OnBoth)
+        public GenericEvent(uint requestorId, IEventCondition[] conditions, IEventAction[] onSuccessActions, IEventAction[] onFailActions, EvaluationTime evaluationTime = EvaluationTime.OnBoth)
             : base(requestorId, evaluationTime)
         {
             if (conditions != null)
@@ -52,7 +53,7 @@ namespace OpenTibia.Server
         }
 
         /// <summary>
-        /// Gets the creature that is requesting the event, if 
+        /// Gets the creature that is requesting the event, if there is any specified.
         /// </summary>
         public ICreature Requestor
         {

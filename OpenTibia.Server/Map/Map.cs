@@ -4,7 +4,7 @@
 // See LICENSE file in the project root for full license information.
 // </copyright>
 
-namespace OpenTibia.Server.Map
+namespace OpenTibia.Server.Mapping
 {
     using System;
     using System.Collections.Concurrent;
@@ -12,106 +12,51 @@ namespace OpenTibia.Server.Map
     using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Communications.Contracts.Enumerations;
     using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
 
-    public class Map
+    public class Map : IMap
     {
+        private const int LowestFloor = 0;
+        private const int HighestFloor = 15;
+        private const int NumberOfFloors = HighestFloor - LowestFloor;
+
         private static readonly TimeSpan MapLoadPercentageReportDelay = TimeSpan.FromSeconds(7);
 
         // Start positions
         public static Location NewbieStart = new Location { X = 32097, Y = 32219, Z = 7 };
+
         public static Location VeteranStart = new Location { X = 32369, Y = 32241, Z = 7 };
-
-        // # Refreshte Zylinder pro Minute
-        // RefreshedCylinders = 8
-
-        // # benannte Punkte
-        // Mark = ("Thais",[32369,32215,7])
-        // Mark = ("Carlin",[32341,31789,7])
-        // Mark = ("Ab'Dendriel",[32661,31687,7])
-        // Mark = ("Rookgaard",[32097,32207,7])
-        // Mark = ("Fibula",[32176,32437,7])
-        // Mark = ("Kazordoon",[32632,31916,8])
-        // Mark = ("Senja",[32125,31667,7])
-        // Mark = ("Folda",[32046,31582,7])
-        // Mark = ("Vega",[32027,31692,7])
-        // Mark = ("Havoc",[32783,32243,6])
-        // Mark = ("Orc",[32901,31771,7])
-        // Mark = ("Minocity",[32404,32124,15])
-        // Mark = ("Minoroom",[32139,32109,11])
-        // Mark = ("Desert",[32653,32117,7])
-        // Mark = ("Swamp",[32724,31976,6])
-        // Mark = ("Home",[32316,31942,7])
-        // Mark = ("Mists",[32854,32333,6])
-        // Mark = ("FibulaDungeon",[32189,32426,9])
-        // Mark = ("DragonIsle",[32781,31603,7])
-        // Mark = ("HellsGate",[32675,31648,10])
-        // Mark = ("Necropolis",[32786,31683,14])
-        // Mark = ("Trollcaves",[32493,32259,8])
-        // Mark = ("Elvenbane",[32590,31657,7])
-        // Mark = ("Fieldofglory",[32430,31671,7])
-        // Mark = ("Hills",[32553,31827,6])
-        // Mark = ("Sternum",[32463,32077,7])
-        // Mark = ("Northport",[32486,31610,7])
-        // Mark = ("Greenshore",[32273,32053,7])
-        // Mark = ("Edron",[33191,31818,7])
-        // Mark = ("Stonehome",[33319,31766,7])
-        // Mark = ("Camp",[32655,32208,7])
-        // Mark = ("Cormaya",[33302,31970,7])
-        // Mark = ("Darashia",[33224,32428,7])
-        // Mark = ("Drefia",[32996,32417,7])
-        // Mark = ("Venore",[32955,32076,6])
-        // Mark = ("Ghostship",[33325,32173,6])
-        // Mark = ("VenoreDragons",[32793,32155,8])
-        // Mark = ("Shadowthorn",[33086,32157,7])
-        // Mark = ("Amazons",[32839,31925,7])
-        // Mark = ("KingsIsle",[32174,31940,7])
-        // Mark = ("Ghostlands",[32223,31831,7])
-        // Mark = ("Ankrahmun",[33162,32802,7])
-        // Mark = ("Oasis",[33132,32661,7])
-        // Mark = ("Marid",[33103,32539,6])
-        // Mark = ("Efreet",[33053,32622,6])
-        // Mark = ("PortHope",[32623,32753,7])
-        // Mark = ("Banuta",[32812,32559,7])
-        // Mark = ("Chor",[32956,32843,7])
-        // Mark = ("Trapwood",[32709,32901,8])
-        // Mark = ("Eremo",[33323,31883,7])
-        // Mark = ("Dagorlad",[31950,32413,7])
-        // Mark = ("Poi",[32808,32337,11])
-
-        // # Depots
-        // Depot = (0,"Thais",1000)
-        // Depot = (1,"Carlin",1000)
-        // Depot = (2,"Kazordoon",1000)
-        // Depot = (3,"Ab'Dendriel",1000)
-        // Depot = (4,"Edron",1000)
-        // Depot = (5,"Darashia",1000)
-        // Depot = (6,"Venore",1000)
-        // Depot = (7,"Ankrahmun",1000)
-        // Depot = (8,"Port Hope",1000)
-        private readonly ConcurrentDictionary<Location, ITile> mapTiles;
 
         // private Location Mininum2DLocation { get; set; }
 
         // private Location Maximum2DLocation { get; set; }
-        public ConcurrentDictionary<Location, ITile> Tiles => this.mapTiles;
+
+        public ConcurrentDictionary<Location, ITile> Tiles { get; }
 
         // public bool Initialized { get; private set; }
-        private IMapLoader Loader { get; }
 
+        private readonly Memory<ITile>[] tiles;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Map"/> class.
+        /// </summary>
+        /// <param name="mapLoader"></param>
         public Map(IMapLoader mapLoader)
         {
-            if (mapLoader == null)
-            {
-                throw new ArgumentNullException(nameof(mapLoader));
-            }
+            mapLoader.ThrowIfNull(nameof(mapLoader));
+
+            this.tiles = new Memory<ITile>[NumberOfFloors];
 
             this.Loader = mapLoader;
-            // Initialized = false;
-            this.mapTiles = new ConcurrentDictionary<Location, ITile>();
+            this.Tiles = new ConcurrentDictionary<Location, ITile>();
         }
+
+        private IMapLoader Loader { get; }
+
 
         public void Load(Location atLocation)
         {
@@ -135,7 +80,7 @@ namespace OpenTibia.Server.Map
                 {
                     if (tile != null)
                     {
-                        this.mapTiles[tile.Location] = tile;
+                        this.Tiles[tile.Location] = tile;
                     }
                 }
             }
@@ -167,7 +112,7 @@ namespace OpenTibia.Server.Map
                             {
                                 if (tile != null)
                                 {
-                                    this.mapTiles[tile.Location] = tile;
+                                    this.Tiles[tile.Location] = tile;
                                 }
                             }
                         }
@@ -210,7 +155,7 @@ namespace OpenTibia.Server.Map
                 {
                     if (tile != null)
                     {
-                        this.mapTiles[tile.Location] = tile;
+                        this.Tiles[tile.Location] = tile;
                     }
                 }
 
@@ -335,7 +280,7 @@ namespace OpenTibia.Server.Map
             {
                 crawlDelta = 1;
                 crawlFrom = Math.Max(0, currentZ - 2);
-                crawlTo = Math.Min(15, currentZ + 2);
+                crawlTo = Math.Min(NumberOfFloors, currentZ + 2);
             }
 
             for (var z = crawlFrom; z != crawlTo + crawlDelta; z += crawlDelta)
@@ -391,11 +336,6 @@ namespace OpenTibia.Server.Map
             if (tile == null)
             {
                 return new byte[0];
-            }
-
-            if (tile.CachedDescription != null)
-            {
-                return tile.CachedDescription;
             }
 
             var tempBytes = new List<byte>();
@@ -467,12 +407,12 @@ namespace OpenTibia.Server.Map
 
                 if (player.KnowsCreatureWithId(creatureId))
                 {
-                    tempBytes.AddRange(BitConverter.GetBytes((ushort)GameOutgoingPacketType.AddKnownCreature));
+                    tempBytes.AddRange(BitConverter.GetBytes((ushort)OutgoingGamePacketType.AddKnownCreature));
                     tempBytes.AddRange(BitConverter.GetBytes(creatureId));
                 }
                 else
                 {
-                    tempBytes.AddRange(BitConverter.GetBytes((ushort)GameOutgoingPacketType.AddUnknownCreature));
+                    tempBytes.AddRange(BitConverter.GetBytes((ushort)OutgoingGamePacketType.AddUnknownCreature));
                     tempBytes.AddRange(BitConverter.GetBytes(player.ChooseToRemoveFromKnownSet()));
                     tempBytes.AddRange(BitConverter.GetBytes(creatureId));
 

@@ -8,16 +8,23 @@ namespace OpenTibia.Server.Movement
 {
     using System;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
     using OpenTibia.Server.Events;
     using OpenTibia.Server.Movement.EventConditions;
     using OpenTibia.Server.Notifications;
 
-    internal class ThingMovementContainerToGround : MovementBase
+    internal class ThingMovementContainerToGround : BaseMovementEvent
     {
+        /// <summary>
+        /// Initializes a new instance of the <see cref="ThingMovementContainerToGround"/> class.
+        /// </summary>
+        /// <param name="creatureRequestingId"></param>
+        /// <param name="thingMoving"></param>
+        /// <param name="fromLocation"></param>
+        /// <param name="toLocation"></param>
+        /// <param name="count"></param>
         public ThingMovementContainerToGround(uint creatureRequestingId, IThing thingMoving, Location fromLocation, Location toLocation, byte count = 1)
             : base(creatureRequestingId, EvaluationTime.OnExecute)
         {
@@ -29,10 +36,7 @@ namespace OpenTibia.Server.Movement
                 throw new ArgumentException("Invalid count zero.");
             }
 
-            if (requestor == null)
-            {
-                throw new ArgumentNullException(nameof(requestor));
-            }
+            requestor.ThrowIfNull(nameof(requestor));
 
             this.Thing = thingMoving;
             this.Count = count;
@@ -69,16 +73,13 @@ namespace OpenTibia.Server.Movement
 
         private void MoveContainerToGround()
         {
-            IItem extraItem;
-            var itemToUpdate = this.Thing as IItem;
-
-            if (this.FromContainer == null || this.ToTile == null || itemToUpdate == null)
+            if (this.FromContainer == null || this.ToTile == null || !(this.Thing is IItem itemToUpdate))
             {
                 return;
             }
 
             // attempt to remove from the source container
-            if (!this.FromContainer.RemoveContent(itemToUpdate.Type.TypeId, this.FromIndex, this.Count, out extraItem))
+            if (!this.FromContainer.RemoveContent(itemToUpdate.Type.TypeId, this.FromIndex, this.Count, out IItem extraItem))
             {
                 return;
             }
@@ -96,7 +97,7 @@ namespace OpenTibia.Server.Movement
             Game.Instance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, this.ToTile.Location, Game.Instance.GetMapTileDescription(conn.PlayerId, this.ToTile.Location)), this.ToTile.Location);
 
             // and handle collision.
-            if (!this.ToTile.HandlesCollision)
+            if (!this.ToTile.HasCollisionEvents)
             {
                 return;
             }

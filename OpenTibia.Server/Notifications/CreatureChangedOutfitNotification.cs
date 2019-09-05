@@ -6,32 +6,34 @@
 
 namespace OpenTibia.Server.Notifications
 {
-    using System;
-    using OpenTibia.Communications;
+    using OpenTibia.Common.Helpers;
     using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Server.Data.Interfaces;
 
-    internal class CreatureChangedOutfitNotification : Notification
+    internal class CreatureChangedOutfitNotification : ProximityNotification
     {
-        public ICreature Creature { get; }
-
-        public CreatureChangedOutfitNotification(Connection connection, ICreature creature)
-            : base(connection)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CreatureChangedOutfitNotification"/> class.
+        /// </summary>
+        /// <param name="arguments">The arguments for this notification.</param>
+        public CreatureChangedOutfitNotification(CreatureChangedOutfitNotificationArguments arguments)
+            : base(arguments?.Creature.Location ?? default)
         {
-            if (creature == null)
-            {
-                throw new ArgumentNullException(nameof(creature));
-            }
+            arguments.ThrowIfNull(nameof(arguments));
 
-            this.Creature = creature;
+            this.Arguments = arguments;
         }
 
+        /// <summary>
+        /// Gets this notification's arguments.
+        /// </summary>
+        public CreatureChangedOutfitNotificationArguments Arguments { get; }
+
+        /// <summary>
+        /// Finalizes the notification in preparation to it being sent.
+        /// </summary>
         public override void Prepare()
         {
-            this.ResponsePackets.Add(new CreatureChangedOutfitPacket
-            {
-                Creature = this.Creature
-            });
+            this.Packets.Add(new CreatureChangedOutfitPacket(this.Arguments.Creature));
         }
     }
 }

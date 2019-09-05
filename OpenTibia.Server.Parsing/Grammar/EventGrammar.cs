@@ -6,9 +6,8 @@
 
 namespace OpenTibia.Server.Parsing.Grammar
 {
-    using System;
     using System.Linq;
-    using OpenTibia.Data.Contracts;
+    using OpenTibia.Common.Helpers;
     using Sprache;
 
     public class EventGrammar
@@ -19,31 +18,23 @@ namespace OpenTibia.Server.Parsing.Grammar
 
         public class MoveUseEvent
         {
-            public ItemEventType Type { get; }
-
-            public ConditionalActionRule Rule { get; }
-
+            /// <summary>
+            /// Initializes a new instance of the <see cref="MoveUseEvent"/> class.
+            /// </summary>
+            /// <param name="rule"></param>
             public MoveUseEvent(ConditionalActionRule rule)
             {
-                if (rule == null)
-                {
-                    throw new ArgumentNullException(nameof(rule));
-                }
+                rule.ThrowIfNull(nameof(rule));
 
-                var firstCondition = rule.ConditionSet.FirstOrDefault();
-
-                ItemEventType eventType;
-
-                if (!Enum.TryParse(firstCondition, out eventType))
-                {
-                    throw new ArgumentException("Invalid rule supplied.");
-                }
-
-                this.Type = eventType;
+                this.Type = rule.ConditionSet.FirstOrDefault();
                 this.Rule = rule;
 
                 rule.ConditionSet.RemoveAt(0); // remove first.
             }
+
+            public string Type { get; }
+
+            public ConditionalActionRule Rule { get; }
         }
     }
 }

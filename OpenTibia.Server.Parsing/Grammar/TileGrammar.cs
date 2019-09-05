@@ -12,26 +12,19 @@ namespace OpenTibia.Server.Parsing.Grammar
 
     public class TileGrammar
     {
-        private static readonly Parser<char> EqualSign = Parse.Char('=');
-        private static readonly Parser<char> OpenCurly = Parse.Char('{');
-        private static readonly Parser<char> CloseCurly = Parse.Char('}');
-        private static readonly Parser<char> DoubleQuote = Parse.Char('"');
-        private static readonly Parser<char> Backslash = Parse.Char('\\');
-        private static readonly Parser<char> Comma = Parse.Char(',');
-
         private static readonly Parser<string> Text =
-            from text in Parse.AnyChar.Except(Parse.WhiteSpace).Except(OpenCurly).Except(CloseCurly).Except(Comma).Except(EqualSign).AtLeastOnce().Text()
+            from text in Parse.AnyChar.Except(Parse.WhiteSpace).Except(CipGrammar.OpenCurly).Except(CipGrammar.CloseCurly).Except(CipGrammar.Comma).Except(CipGrammar.EqualSign).AtLeastOnce().Text()
             select text.Trim();
 
         private static readonly Parser<string> EnclosedInCurly =
-            from openCurly in OpenCurly
+            from openCurly in CipGrammar.OpenCurly
             from content in Content
-            from closeCurly in CloseCurly
+            from closeCurly in CipGrammar.CloseCurly
             select openCurly + content.ToString() + closeCurly;
 
         private static readonly Parser<string> KeyValPair =
             from key in Text
-            from eq in EqualSign
+            from eq in CipGrammar.EqualSign
             from value in EnclosedInCurly.Or(CipGrammar.QuotedMessage).Or(Text).Once()
             select key + eq + value; // we want the whole thing .. key=val
 
@@ -39,20 +32,25 @@ namespace OpenTibia.Server.Parsing.Grammar
             from leadingWs in Parse.WhiteSpace.Many()
             from id in Parse.Number.Optional()
             from ws in Parse.WhiteSpace.Many()
-            from attrs in KeyValPair.Or(Text).Optional().DelimitedBy(Comma)
+            from attrs in KeyValPair.Or(Text).Optional().DelimitedBy(CipGrammar.Comma)
             select new ContentElement(id.IsEmpty ? "0" : id.Get(), attrs.Select(i => i.IsEmpty ? string.Empty : i.Get()).ToArray());
 
         public class ContentElement
         {
-            public string Id { get; }
-
-            public object[] Attributes { get; }
-
+            /// <summary>
+            /// Initializes a new instance of the <see cref="ContentElement"/> class.
+            /// </summary>
+            /// <param name="id"></param>
+            /// <param name="attributes"></param>
             public ContentElement(string id, params object[] attributes)
             {
                 this.Id = id;
                 this.Attributes = attributes;
             }
+
+            public string Id { get; }
+
+            public object[] Attributes { get; }
 
             public override string ToString()
             {

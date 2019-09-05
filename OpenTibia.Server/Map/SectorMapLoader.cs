@@ -10,8 +10,8 @@ namespace OpenTibia.Server.Map
     using System.IO;
     using System.Threading;
     using System.Threading.Tasks;
-    using OpenTibia.Server.Data.Interfaces;
-    using StackExchange.Redis;
+    using OpenTibia.Common.Helpers;
+    using OpenTibia.Server.Contracts.Abstractions;
 
     public class SectorMapLoader : IMapLoader
     {
@@ -35,19 +35,20 @@ namespace OpenTibia.Server.Map
         private long totalTileCount;
         private long totalLoadedCount;
 
-        public byte PercentageComplete => (byte)Math.Floor(Math.Min(100, Math.Max((decimal)0, this.totalLoadedCount * 100 / (this.totalTileCount + 1))));
+        public byte PercentageComplete => (byte)Math.Floor(Math.Min(100, Math.Max(0M, this.totalLoadedCount * 100 / (this.totalTileCount + 1))));
 
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SectorMapLoader"/> class.
+        /// </summary>
+        /// <param name="mapFilesPath"></param>
         public SectorMapLoader(string mapFilesPath)
         {
-            if (string.IsNullOrWhiteSpace(mapFilesPath))
-            {
-                throw new ArgumentNullException(nameof(mapFilesPath));
-            }
+            mapFilesPath.ThrowIfNullOrWhiteSpace(nameof(mapFilesPath));
 
             this.mapDirInfo = new DirectoryInfo(mapFilesPath);
 
             this.totalTileCount = 1;
-            this.totalLoadedCount = default(long);
+            this.totalLoadedCount = default;
             this.sectorsLoaded = new bool[SectorXMax - SectorXMin, SectorYMax - SectorYMin, SectorZMax - SectorZMin];
         }
 
@@ -65,7 +66,7 @@ namespace OpenTibia.Server.Map
             var tiles = new ITile[(toSectorX - fromSectorX + 1) * 32, (toSectorY - fromSectorY + 1) * 32, toSectorZ - fromSectorZ + 1];
 
             this.totalTileCount = tiles.LongLength;
-            this.totalLoadedCount = default(long);
+            this.totalLoadedCount = default;
 
             IDatabase cache = CacheConnection.GetDatabase();
 

@@ -13,98 +13,110 @@ namespace OpenTibia.Server
     using System.Threading;
     using System.Threading.Tasks;
     using OpenTibia.Common.Helpers;
+    using OpenTibia.Common.Utilities;
     using OpenTibia.Communications;
-    using OpenTibia.Communications.Interfaces;
+    using OpenTibia.Communications.Contracts.Abstractions;
     using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Data.Contracts;
+    using OpenTibia.Data.Contracts.Enumerations;
     using OpenTibia.Data.Models;
-    using OpenTibia.Scheduling;
     using OpenTibia.Scheduling.Contracts;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Scheduling.Contracts.Enumerations;
     using OpenTibia.Server.Algorithms;
     using OpenTibia.Server.Combat;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
-    using OpenTibia.Server.Events;
-    using OpenTibia.Server.Items;
-    using OpenTibia.Server.Map;
-    using OpenTibia.Server.Monsters;
+    using OpenTibia.Server.Contracts;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Structs;
+    using OpenTibia.Server.Models;
     using OpenTibia.Server.Movement;
     using OpenTibia.Server.Notifications;
-    using OpenTibia.Server.Scripting;
-    using OpenTibia.Utilities;
 
     /// <summary>
     /// Main class.
     /// </summary>
-    public class Game
+    public class Game : IGame, ICreatureManager
     {
+        private const int GameStepSizeInMilliseconds = 500;
+
         /// <summary>
         /// Defines the <see cref="TimeSpan"/> to wait between checks of orphaned conections.
         /// </summary>
         private static readonly TimeSpan CheckOrphanConnectionsDelay = TimeSpan.FromSeconds(1);
 
-        /// <summary>
-        /// Singleton instance of the <see cref="Game"/> class.
-        /// </summary>
-        private static readonly Lazy<Game> GameInstance = new Lazy<Game>(() => new Game());
-
-        /// <summary>
-        /// Gets the singleton instance of the <see cref="Game"/> class.
-        /// </summary>
-        public static Game Instance => Game.GameInstance.Value;
-
         private readonly object attackLock;
         private readonly object walkLock;
-        private readonly object notifQueueLock;
         private readonly object combatQueueLock;
+
+        /// <summary>
+        /// Gets the current <see cref="map"/> instance of the game.
+        /// </summary>
+        private readonly IMap map;
+
+        private readonly IScheduler scheduler;
+
+        /// <summary>
+        /// Gets the <see cref="IDictionary{TKey,TValue}"/> containing the <see cref="IItemEvent"/>s of the game.
+        /// </summary>
+        private readonly IDictionary<ItemEventType, HashSet<IItemEvent>> eventsCatalog;
+
+        private readonly IItemEventLoader eventLoader;
+
+        private readonly IItemLoader itemLoader;
+
+        private readonly IMonsterLoader monsterLoader;
 
         private WorldState status;
 
         /// <summary>
+        /// Holds the <see cref="ConcurrentDictionary{TKey,TValue}"/> of all <see cref="Creature"/>s in the game, in which the Key is the <see cref="Creature.Id"/>.
+        /// </summary>
+        private readonly ConcurrentDictionary<Guid, ICreature> creatureMap;
+
+        /// <summary>
         /// Initializes a new instance of the <see cref="Game"/> class.
         /// </summary>
-        public Game()
+        public Game(
+            IMap gameMap,
+            IItemEventLoader itemEventLoader,
+            IItemLoader itemLoader,
+            IMonsterLoader monsterLoader,
+            IScheduler scheduler,
+            IConnectionManager connectionManager,
+            INotificationFactory notificationFactory,
+            ICreatureFactory creatureFactory)
         {
             this.attackLock = new object();
             this.walkLock = new object();
-            this.notifQueueLock = new object();
             this.combatQueueLock = new object();
 
-            this.Scheduler = new Scheduler(DateTime.Now); // TODO: chose another date here?
+            this.ConnectionManager = connectionManager;
+            this.CreatureFactory = creatureFactory;
+            this.NotificationFactory = notificationFactory;
 
-            this.NotificationQueue = new ConcurrentQueue<INotification>();
+            this.creatureMap = new ConcurrentDictionary<Guid, ICreature>();
             this.CombatQueue = new ConcurrentQueue<ICombatOperation>();
-            this.Connections = new ConcurrentDictionary<uint, Connection>();
-            this.Creatures = new ConcurrentDictionary<uint, Creature>();
 
             // Initialize the map
-            this.Map = new Map.Map(new SectorMapLoader(ServerConfiguration.LiveMapDirectory));
+            this.map = gameMap;
+            this.scheduler = scheduler;
+            this.eventLoader = itemEventLoader;
+            this.itemLoader = itemLoader;
+            this.monsterLoader = monsterLoader;
 
             // Initialize game vars.
             this.Status = WorldState.Creating;
             this.LightColor = (byte)LightColors.White;
             this.LightLevel = (byte)LightLevels.World;
+
+            this.eventsCatalog = this.eventLoader.Load(ServerConfiguration.MoveUseFileName);
+
+            this.scheduler.OnEventFired += this.ProcessFiredEvent;
         }
 
-        public IItemEventLoader EventLoader { get; private set; }
+        public DateTimeOffset CurrentTime { get; private set; }
 
-        public IItemLoader ItemLoader { get; private set; }
-
-        public IMonsterLoader MonsterLoader { get; private set; }
-
-        public DateTime CurrentTime { get; private set; }
-
-        public DateTime CombatSynchronizationTime { get; private set; }
-
-        /// <summary>
-        /// Gets the <see cref="ConcurrentDictionary{TKey,TValue}"/> of all <see cref="Creature"/>s in the game, in which the Key is the <see cref="Creature.CreatureId"/>.
-        /// </summary>
-        public ConcurrentDictionary<uint, Creature> Creatures { get; }
-
-        /// <summary>
-        /// Gets the <see cref="IDictionary{TKey,TValue}"/> containing the <see cref="IItemEvent"/>s of the game.
-        /// </summary>
-        public IDictionary<ItemEventType, HashSet<IItemEvent>> EventsCatalog { get; private set; }
+        public DateTimeOffset CombatSynchronizationTime { get; private set; }
 
         /// <summary>
         /// Gets the current world's light level <see cref="byte"/> value.
@@ -133,39 +145,17 @@ namespace OpenTibia.Server
             }
         }
 
-        private IScheduler Scheduler { get; }
+        public IConnectionManager ConnectionManager { get; }
 
-        /// <summary>
-        /// Gets the <see cref="ConcurrentDictionary{TKey,TValue}"/> of all <see cref="Connection"/>s in the game, in which the Key is the <see cref="Creature.CreatureId"/>.
-        /// </summary>
-        private ConcurrentDictionary<uint, Connection> Connections { get; }
+        public ICreatureFactory CreatureFactory { get; }
+        public INotificationFactory NotificationFactory { get; }
 
-        /// <summary>
-        /// Gets the current <see cref="ConcurrentQueue{T}"/> of <see cref="INotification"/>s, which the game processes on the <see cref="NotificationsProcessor"/> method.
-        /// </summary>
-        private ConcurrentQueue<INotification> NotificationQueue { get; }
+        public IScriptFactory ScriptFactory { get; private set; }
 
         /// <summary>
         /// Gets the current <see cref="ConcurrentQueue{T}"/> of <see cref="ICombatOperation"/>s, which the game processes on the <see cref="CombatProcessor"/> method.
         /// </summary>
         private ConcurrentQueue<ICombatOperation> CombatQueue { get; }
-
-        /// <summary>
-        /// Gets or sets the master <see cref="CancellationToken"/> passed down to any new thread started by the <see cref="Game"/> instance.
-        /// </summary>
-        private CancellationToken CancelToken { get; set; }
-
-        /// <summary>
-        /// Gets the current <see cref="Map"/> instance of the game.
-        /// </summary>
-        private Map.Map Map { get; }
-
-        public void Initialize(IItemEventLoader eventLoader, IItemLoader itemLoader, IMonsterLoader monsterLoader)
-        {
-            this.EventLoader = eventLoader ?? throw new ArgumentNullException(nameof(eventLoader));
-            this.ItemLoader = itemLoader ?? throw new ArgumentNullException(nameof(itemLoader));
-            this.MonsterLoader = monsterLoader ?? throw new ArgumentNullException(nameof(monsterLoader));
-        }
 
         /// <summary>
         /// Attempts to find a path using the <see cref="AStar"/> implementation between two <see cref="Location"/>s.
@@ -223,17 +213,16 @@ namespace OpenTibia.Server
             return dirList;
         }
 
-        public byte[] GetMapTileDescription(uint requestingPlayerId, Location location)
+        public byte[] GetMapTileDescription(Guid requestingPlayerId, Location location)
         {
-            var tile = this.Map[location];
-            var requestingPlayer = this.GetCreatureWithId(requestingPlayerId) as IPlayer;
+            var tile = this.map[location];
 
-            if (requestingPlayer == null)
+            if (!(this.FindCreatureById(requestingPlayerId) is IPlayer requestingPlayer))
             {
                 return new byte[0];
             }
 
-            return tile == null ? new byte[0] : this.Map.GetTileDescription(requestingPlayer, tile).ToArray();
+            return tile == null ? new byte[0] : this.map.GetTileDescription(requestingPlayer, tile).ToArray();
         }
 
         public void SignalWalkAvailable()
@@ -252,52 +241,29 @@ namespace OpenTibia.Server
             }
         }
 
-        public void Begin(CancellationToken masterCancellationToken)
-        {
-            if (masterCancellationToken == null || masterCancellationToken.IsCancellationRequested)
-            {
-                throw new ArgumentException("Invalid CancellationToken.");
-            }
-
-            this.CancelToken = masterCancellationToken;
-
-            Task.Factory.StartNew(this.ConnectionSweeper, TaskCreationOptions.LongRunning);
-            //Task.Factory.StartNew(this.DayCycle, TaskCreationOptions.LongRunning);
-
-            //Task.Factory.StartNew(this.CheckCreatureWalk, TaskCreationOptions.LongRunning);
-            //Task.Factory.StartNew(this.CheckCreatureAutoAttack, TaskCreationOptions.LongRunning);
-
-            Task.Factory.StartNew(this.NotificationsProcessor, TaskCreationOptions.LongRunning);
-            //Task.Factory.StartNew(this.CombatProcessor, TaskCreationOptions.LongRunning);
-
-            this.EventsCatalog = this.EventLoader.Load(ServerConfiguration.MoveUseFileName);
-
-            this.Scheduler.OnEventFired += this.ProcessFiredEvent;
-
-            // Leave this at the very end, when everything is ready...
-            this.Status = WorldState.Open;
-        }
-
-        public bool ScheduleEvent(IEvent newEvent, TimeSpan delay = default(TimeSpan))
+        public bool ScheduleEvent(IEvent newEvent, TimeSpan delay = default)
         {
             newEvent.ThrowIfNull(nameof(newEvent));
 
-            // pre check if can be executed only if not explicitly set to executeTime
-            if (newEvent.EvaluateAt == EvaluationTime.OnExecute || newEvent.CanBeExecuted)
+            // Check if the event can be executed if explicitly set to OnShchedule or OnBoth.
+            if ((newEvent.EvaluateAt == EvaluationTime.OnSchedule ||
+                 newEvent.EvaluateAt == EvaluationTime.OnBoth) && !newEvent.CanBeExecuted)
             {
-                var noDelay = delay == default(TimeSpan) || delay < TimeSpan.Zero;
-
-                if (noDelay)
-                {
-                    this.Scheduler.ImmediateEvent(newEvent);
-                    return true;
-                }
-
-                this.Scheduler.ScheduleEvent(newEvent, DateTime.Now + delay);
-                return true;
+                return false;
             }
 
-            return false;
+            var noDelay = delay == default || delay < TimeSpan.Zero;
+
+            if (noDelay)
+            {
+                this.scheduler.ImmediateEvent(newEvent);
+            }
+            else
+            {
+                this.scheduler.ScheduleEvent(newEvent, DateTimeOffset.UtcNow + delay);
+            }
+
+            return true;
         }
 
         public void RequestCombatOp(ICombatOperation newOp)
@@ -310,25 +276,25 @@ namespace OpenTibia.Server
             }
         }
 
-        public void NotifySinglePlayer(IPlayer player, Func<Connection, Notification> notificationFunc)
+        public void NotifySinglePlayer(IPlayer player, Func<IConnection, INotification> notificationFunc)
         {
             if (player == null)
             {
                 // TODO: proper logging
-                Console.WriteLine($"WARN: null {nameof(player)} on NotifySinglePlayer.");
+                Console.WriteLine($"WARN: null {nameof(player)} on {nameof(this.NotifySinglePlayer)}.");
                 return;
             }
 
             if (notificationFunc == null)
             {
                 // TODO: proper logging
-                Console.WriteLine($"WARN: null {nameof(notificationFunc)} on NotifySinglePlayer.");
+                Console.WriteLine($"WARN: null {nameof(notificationFunc)} on {nameof(this.NotifySinglePlayer)}.");
                 return;
             }
 
             try
             {
-                var conn = this.Connections[player.CreatureId];
+                var conn = this.ConnectionManager.FindByPlayerId(player.Id);
 
                 this.InternalRequestNofitication(notificationFunc(conn));
             }
@@ -340,7 +306,7 @@ namespace OpenTibia.Server
             }
         }
 
-        public void NotifyAllPlayers(Func<Connection, Notification> notificationFunc)
+        public void NotifyAllPlayers(Func<IConnection, INotification> notificationFunc)
         {
             if (notificationFunc == null)
             {
@@ -349,18 +315,18 @@ namespace OpenTibia.Server
                 return;
             }
 
-            foreach (var conn in this.Connections.Values)
+            foreach (var conn in this.ConnectionManager.GetAllActive())
             {
                 this.InternalRequestNofitication(notificationFunc(conn));
             }
         }
 
-        public void NotifySpectatingPlayers(Func<Connection, Notification> notificationFunc, params Location[] locations)
+        public void NotifySpectatingPlayers(Func<IConnection, INotification> notificationFunc, params Location[] locations)
         {
             if (notificationFunc == null)
             {
                 // TODO: proper logging
-                Console.WriteLine($"WARN: null {nameof(notificationFunc)} on NotifySpectatingPlayers.");
+                Console.WriteLine($"WARN: null {nameof(notificationFunc)} on {nameof(this.NotifySpectatingPlayers)}.");
                 return;
             }
 
@@ -379,7 +345,7 @@ namespace OpenTibia.Server
             {
                 try
                 {
-                    var conn = this.Connections[spectator.CreatureId];
+                    var conn = this.ConnectionManager.FindByPlayerId(spectator.Id);
 
                     this.InternalRequestNofitication(notificationFunc(conn));
                 }
@@ -392,21 +358,167 @@ namespace OpenTibia.Server
             }
         }
 
+        public async Task RunAsync(CancellationToken cancellationToken)
+        {
+            var stepSize = TimeSpan.FromMilliseconds(GameStepSizeInMilliseconds);
+
+            var connectionSweepperTask = Task.Factory.StartNew(this.ConnectionSweeper, TaskCreationOptions.LongRunning);
+
+            // Leave this at the very end, when everything is ready...
+            this.Status = WorldState.Open;
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var timeAtStart = DateTimeOffset.UtcNow;
+
+                this.AdvanceTime(stepSize);
+
+                var timeThatCheckTook = DateTimeOffset.UtcNow - timeAtStart;
+                var actualDelay = stepSize - timeThatCheckTook;
+
+                if (actualDelay > TimeSpan.Zero)
+                {
+                    await Task.Delay(actualDelay, cancellationToken);
+                }
+                else
+                {
+                    // TODO: proper logging.
+                    Console.WriteLine($"WARN: Time is slipping. It took {timeThatCheckTook} to advance time with a step size of {stepSize}.");
+                }
+            }
+
+            await Task.WhenAll(connectionSweepperTask);
+        }
+
+        /// <summary>
+        /// Advances Time in the game by the supplied span.
+        /// </summary>
+        /// <param name="timeStep">The span of time to advance the game for.</param>
+        private void AdvanceTime(TimeSpan timeStep)
+        {
+            // store the current time for global reference and actual calculations.
+            this.CurrentTime = DateTimeOffset.UtcNow;
+
+            var eventsToSchedule =
+
+                // handle all creature thinking and decision making.
+                this.AdvanceTimeForThinking(timeStep)
+
+                // handle speech for everything.
+                .Union(this.AdvanceTimeForSpeech(timeStep))
+
+                // handle all creature moving and actions.
+                .Union(this.AdvanceTimeForMoving(timeStep))
+
+                // handle combat.
+                .Union(this.AdvanceTimeForCombat(timeStep))
+
+                // handle miscellaneous things like day cycle.
+                .Union(this.AdvanceTimeForMiscellaneous(timeStep));
+
+            foreach (var (evt, delay) in eventsToSchedule)
+            {
+                this.ScheduleEvent(evt, delay - (DateTimeOffset.UtcNow - this.CurrentTime));
+            }
+        }
+
+        private IEnumerable<(IEvent Event, TimeSpan Delay)> AdvanceTimeForThinking(TimeSpan stepSize)
+        {
+            var eventsToSchedule = new List<(IEvent Event, TimeSpan Delay)>();
+
+            foreach (var creature in this.creatureMap.Values)
+            {
+                // TODO: make creature think here
+                // Schedule any actions that the creature would take here.
+                var decisionsAndActions = creature.Think();
+
+                if (decisionsAndActions != null && decisionsAndActions.Any())
+                {
+                    eventsToSchedule.AddRange(decisionsAndActions);
+                }
+            }
+
+            return eventsToSchedule;
+        }
+
+        private IEnumerable<(IEvent Event, TimeSpan Delay)> AdvanceTimeForSpeech(TimeSpan timeStep)
+        {
+            throw new NotImplementedException();
+        }
+
+        private IEnumerable<(IEvent Event, TimeSpan Delay)> AdvanceTimeForMoving(TimeSpan timeStep)
+        {
+            throw new NotImplementedException();
+        }
+
+        private IEnumerable<(IEvent Event, TimeSpan Delay)> AdvanceTimeForCombat(TimeSpan timeStep)
+        {
+            throw new NotImplementedException();
+        }
+
+        private IEnumerable<(IEvent Event, TimeSpan Delay)> AdvanceTimeForMiscellaneous(TimeSpan timeStep)
+        {
+            var events = new List<(IEvent, TimeSpan)>();
+
+            const int NightLightLevel = 30;
+            const int DuskDawnLightLevel = 130;
+            const int DayLightLevel = 255;
+
+            // A day is roughly an hour in real time, and night lasts roughly 1/3 of the day in real time
+            // Dusk and Dawns last for 30 minutes roughly, so les aproximate that to 2 minutes.
+            var currentMinute = this.CurrentTime.Minute;
+
+            if (currentMinute >= 0 && currentMinute <= 37)
+            {
+                // Day time: [0, 37] minutes on the hour.
+                if (this.LightLevel != DayLightLevel)
+                {
+                    this.LightLevel = DayLightLevel;
+                    this.LightColor = (byte)LightColors.White;
+
+                    events.Add((this.NotificationFactory.Create(NotificationType.WorldLightChanged, new WorldLightChangedNotificationArguments(this.LightLevel, this.LightColor)) as IEvent, TimeSpan.Zero));
+                }
+            }
+            else if (currentMinute == 38 || currentMinute == 39 || currentMinute == 58 || currentMinute == 59)
+            {
+                // Dusk: [38, 39] minutes on the hour.
+                // Dawn: [58, 59] minutes on the hour.
+                if (this.LightLevel != DuskDawnLightLevel)
+                {
+                    this.LightLevel = DuskDawnLightLevel;
+                    this.LightColor = (byte)LightColors.Orange;
+
+                    events.Add((this.NotificationFactory.Create(NotificationType.WorldLightChanged, new WorldLightChangedNotificationArguments(this.LightLevel, this.LightColor)) as IEvent, TimeSpan.Zero));
+                }
+            }
+            else if (currentMinute >= 40 && currentMinute <= 57)
+            {
+                // Night time: [40, 57] minutes on the hour.
+                if (this.LightLevel != NightLightLevel)
+                {
+                    this.LightLevel = NightLightLevel;
+                    this.LightColor = (byte)LightColors.White;
+
+                    events.Add((this.NotificationFactory.Create(NotificationType.WorldLightChanged, new WorldLightChangedNotificationArguments(this.LightLevel, this.LightColor)) as IEvent, TimeSpan.Zero));
+                }
+            }
+
+            return events;
+        }
+
         private void CheckCreatureWalk()
         {
             while (!this.CancelToken.IsCancellationRequested)
             {
                 try
                 {
-                    this.CurrentTime = DateTime.Now;
                     var minCoolDown = TimeSpan.MaxValue;
 
-                    foreach (var creature in this.Creatures.Values.Where(c => c.WalkingQueue.Count > 0).ToList())
+                    foreach (var creature in this.creatureMap.Values.Where(c => c.WalkingQueue.Count > 0).ToList())
                     {
-                        Tuple<byte, Direction> nextTuple;
-                        var cooldownTime = creature.CalculateRemainingCooldownTime(CooldownType.Move, this.CurrentTime);
+                        var cooldownTime = creature.CalculateRemainingCooldownTime(ExhaustionType.Move, this.CurrentTime);
 
-                        if (cooldownTime <= TimeSpan.Zero && creature.WalkingQueue.TryPeek(out nextTuple) && creature.NextStepId == nextTuple.Item1)
+                        if (cooldownTime <= TimeSpan.Zero && creature.WalkingQueue.TryPeek(out Tuple<byte, Direction> nextTuple) && creature.NextStepId == nextTuple.Item1)
                         {
                             // Time to walk, let's process it.
                             if (!creature.WalkingQueue.TryDequeue(out nextTuple))
@@ -418,22 +530,19 @@ namespace OpenTibia.Server
                             {
                                 creature.StopWalking();
 
-                                var player = creature as IPlayer;
-                                var connection = this.Connections[player.CreatureId];
-
-                                if (connection != null)
+                                if (creature is IPlayer player)
                                 {
                                     this.InternalRequestNofitication(
-                                        new GenericNotification(
-                                            connection,
-                                            new PlayerWalkCancelPacket { Direction = player.Direction },
-                                            new TextMessagePacket { Message = "Sorry, not possible.", Type = MessageType.StatusSmall })
-                                    );
+                                        this.NotificationFactory.Create(
+                                            NotificationType.Generic,
+                                            new GenericNotificationArguments(
+                                                new PlayerWalkCancelPacket(player.Direction),
+                                                new TextMessagePacket(MessageType.StatusSmall, "Sorry, not possible."))));
                                 }
                             }
 
                             // recalc cooldown for this creature
-                            cooldownTime = creature.CalculateRemainingCooldownTime(CooldownType.Move, this.CurrentTime);
+                            cooldownTime = creature.CalculateRemainingCooldownTime(ExhaustionType.Move, this.CurrentTime);
 
                             if (creature.WalkingQueue.Count > 0 && cooldownTime < minCoolDown)
                             {
@@ -450,7 +559,7 @@ namespace OpenTibia.Server
                     {
                         if (minCoolDown != TimeSpan.MaxValue)
                         {
-                            var timeThatCheckTook = DateTime.Now - this.CurrentTime;
+                            var timeThatCheckTook = DateTimeOffset.UtcNow - this.CurrentTime;
                             var timeDiff = minCoolDown - timeThatCheckTook; // factor in the time we took to check all queues.
                             var actualCooldown = timeDiff > TimeSpan.Zero ? timeDiff : TimeSpan.Zero; // and if that is positive.
 
@@ -476,12 +585,12 @@ namespace OpenTibia.Server
             {
                 try
                 {
-                    this.CombatSynchronizationTime = DateTime.Now;
+                    this.CombatSynchronizationTime = DateTimeOffset.UtcNow;
                     var minCoolDown = TimeSpan.MaxValue;
 
-                    foreach (var creature in this.Creatures.Values.Where(c => c.AutoAttackTargetId > 0).ToList())
+                    foreach (var creature in this.creatureMap.Values.Where(c => c.AutoAttackTargetId > 0).ToList())
                     {
-                        var cooldownTime = creature.CalculateRemainingCooldownTime(CooldownType.Combat, this.CombatSynchronizationTime);
+                        var cooldownTime = creature.CalculateRemainingCooldownTime(ExhaustionType.Combat, this.CombatSynchronizationTime);
 
                         if (cooldownTime <= TimeSpan.Zero)
                         {
@@ -489,9 +598,7 @@ namespace OpenTibia.Server
                             cooldownTime = TimeSpan.MaxValue;
 
                             // Time to attack, let's process it.
-                            var target = this.GetCreatureWithId(creature.AutoAttackTargetId) as Creature;
-
-                            if (target != null)
+                            if (this.GetCreatureWithId(creature.AutoAttackTargetId) is Creature target)
                             {
                                 var standardAttackOp = new StandardAttackOperation(creature, target);
 
@@ -518,7 +625,7 @@ namespace OpenTibia.Server
                     {
                         if (minCoolDown != TimeSpan.MaxValue)
                         {
-                            var timeThatCheckTook = DateTime.Now - this.CombatSynchronizationTime;
+                            var timeThatCheckTook = DateTimeOffset.UtcNow - this.CombatSynchronizationTime;
                             var timeDiff = minCoolDown - timeThatCheckTook; // factor in the time we took to check all queues.
                             var actualCooldown = timeDiff > TimeSpan.Zero ? timeDiff : TimeSpan.Zero; // and if that is positive.
 
@@ -540,12 +647,12 @@ namespace OpenTibia.Server
 
         private void PlaceMonsters()
         {
-            var monsterSpawns = this.MonsterLoader.LoadSpawns(ServerConfiguration.SpawnsFileName);
+            var monsterSpawns = this.monsterLoader.LoadSpawns(ServerConfiguration.SpawnsFileName);
             var loadedCount = 0;
             var spawnsList = monsterSpawns as IList<Spawn> ?? monsterSpawns.ToList();
             var totalCount = spawnsList.Sum(s => s.Count);
 
-            var percentageCompleteFunc = new Func<byte>(() => (byte)Math.Floor(Math.Min(100, Math.Max((decimal)0, loadedCount * 100 / (totalCount + 1)))));
+            var percentageCompleteFunc = new Func<byte>(() => (byte)Math.Floor(Math.Min(100, Math.Max(0M, loadedCount * 100 / (totalCount + 1)))));
             var cts = new CancellationTokenSource();
 
             Task.Factory.StartNew(
@@ -579,16 +686,14 @@ namespace OpenTibia.Server
                             continue;
                         }
 
-                        Location foundLocation;
-
                         // Need to actually pathfind to avoid placing a monster in unreachable places.
-                        this.Pathfind(spawn.Location, randomTile.Location, out foundLocation, (i + 1) * 100);
+                        this.Pathfind(spawn.Location, randomTile.Location, out Location foundLocation, (i + 1) * 100);
 
                         var foundTile = this.GetTileAt(foundLocation);
 
                         if (foundTile != null && !foundTile.BlocksPass)
                         {
-                            Functions.MonsterOnMap(foundLocation, spawn.Id);
+                            this.ScriptFactory.MonsterOnMap(this, foundLocation, spawn.Id);
                             placed = true;
                         }
                     }
@@ -609,17 +714,17 @@ namespace OpenTibia.Server
         }
 
         // Connection cleaning task
-        private void ConnectionSweeper()
+        private void ConnectionSweeper(object tokenState)
         {
-            while (!this.CancelToken.IsCancellationRequested)
+            var cancellationToken = (tokenState as CancellationToken?).Value;
+
+            while (!cancellationToken.IsCancellationRequested)
             {
-                Thread.Sleep(Game.CheckOrphanConnectionsDelay);
+                Thread.Sleep(CheckOrphanConnectionsDelay);
 
-                foreach (var pcKvp in this.Connections.Where(playerConn => !playerConn.Value.Socket.Connected).ToList())
+                foreach (var orphanedConnection in this.ConnectionManager.GetAllOrphaned())
                 {
-                    var player = this.GetCreatureWithId(pcKvp.Key) as Player;
-
-                    if (player == null)
+                    if (!(this.GetCreatureWithId(orphanedConnection.PlayerId) is IPlayer player))
                     {
                         continue;
                     }
@@ -628,76 +733,8 @@ namespace OpenTibia.Server
 
                     if (player.CanLogout)
                     {
-                        this.AttemptLogout(player);
+                        player.AttemptLogout();
                     }
-                }
-            }
-        }
-
-        // Day -> Dusk -> Night -> Dawn cycle thread
-        private void DayCycle()
-        {
-            // A day is an hour in real time...
-            // So night in realtime lasts 1/3 of the day IRL
-            // Dusk and Dawns last for... 30 minutes IRL, so les aproximate that to 2 minutes.
-            var nightTime = TimeSpan.FromMinutes(18);
-            var dawnTime = TimeSpan.FromMinutes(2);
-            var dayTime = TimeSpan.FromMinutes(38);
-            var duskTime = TimeSpan.FromMinutes(2);
-
-            while (!this.CancelToken.IsCancellationRequested)
-            {
-                Thread.Sleep(dayTime);
-
-                this.LightLevel = 130;
-                this.LightColor = (byte)LightColors.Orange;
-                this.NotifyAllPlayers(conn => new WorldLightChangedNotification(conn, this.LightLevel, this.LightColor));
-
-                Thread.Sleep(duskTime);
-
-                this.LightLevel = 30;
-                this.LightColor = (byte)LightColors.White;
-                this.NotifyAllPlayers(conn => new WorldLightChangedNotification(conn, this.LightLevel, this.LightColor));
-
-                Thread.Sleep(nightTime);
-
-                this.LightLevel = 130;
-                this.LightColor = (byte)LightColors.Orange;
-                this.NotifyAllPlayers(conn => new WorldLightChangedNotification(conn, this.LightLevel, this.LightColor));
-
-                Thread.Sleep(dawnTime);
-
-                this.LightLevel = 255;
-                this.LightColor = (byte)LightColors.White;
-                this.NotifyAllPlayers(conn => new WorldLightChangedNotification(conn, this.LightLevel, this.LightColor));
-            }
-        }
-
-        // Notification thread
-        private void NotificationsProcessor()
-        {
-            while (!this.CancelToken.IsCancellationRequested)
-            {
-                INotification notification;
-
-                while (this.NotificationQueue.Count == 0 || !this.NotificationQueue.TryDequeue(out notification))
-                {
-                    lock (this.notifQueueLock)
-                    {
-                        Monitor.Wait(this.notifQueueLock);
-                    }
-                }
-
-                try
-                {
-                    Console.WriteLine($"Sending {notification.GetType().Name} [{notification.EventId}] to {notification.Connection.PlayerId}");
-                    notification.Send();
-                }
-                catch (Exception ex)
-                {
-                    // TODO: proper logging
-                    Console.WriteLine(ex.Message);
-                    Console.WriteLine(ex.StackTrace);
                 }
             }
         }
@@ -705,7 +742,7 @@ namespace OpenTibia.Server
         // Movement thread
         private void ProcessFiredEvent(object sender, EventFiredEventArgs eventArgs)
         {
-            if (sender != this.Scheduler || eventArgs?.Event == null)
+            if (sender != this.scheduler || eventArgs?.Event == null)
             {
                 return;
             }
@@ -746,10 +783,8 @@ namespace OpenTibia.Server
                     if (combatOp.CanBeExecuted)
                     {
                         var canAttack = true;
-                        var attackerAsCreature = combatOp.Attacker as ICreature;
-                        var targetAsCreature = combatOp.Target as ICreature;
 
-                        if (targetAsCreature != null && attackerAsCreature != null)
+                        if (combatOp.Target is ICreature targetAsCreature && combatOp.Attacker is ICreature attackerAsCreature)
                         {
                             canAttack &= attackerAsCreature.CanSee(targetAsCreature);
                             canAttack &= this.CanThrowBetween(attackerAsCreature.Location, targetAsCreature.Location);
@@ -781,17 +816,21 @@ namespace OpenTibia.Server
 
         public IEnumerable<uint> GetSpectatingCreatureIds(Location location)
         {
-            return this.Map.GetCreatureIdsAt(location);
+            return this.map.GetCreatureIdsAt(location);
         }
 
         public ITile GetTileAt(Location location)
         {
-            return this.Map[location];
+            return this.map[location];
         }
 
         private IEnumerable<IPlayer> GetSpectatingPlayers(Location location)
         {
-            return this.Connections.Keys.Select(creatureId => this.Creatures[creatureId]).Where(c => c.CanSee(location)).Cast<IPlayer>().ToList();
+            return this.ConnectionManager.GetAllAliveCreatureIds()
+                .Select(creatureId => this.GetCreatureWithId(creatureId))
+                .Where(c => c.CanSee(location))
+                .Cast<IPlayer>()
+                .ToList();
         }
 
         public bool CanThrowBetween(Location fromLocation, Location toLocation, bool checkLineOfSight = true)
@@ -884,19 +923,18 @@ namespace OpenTibia.Server
 
         internal Player Login(PlayerModel playerRecord, Connection connection)
         {
-            var rng = new Random();
-            var player = new Player((uint)rng.Next(), playerRecord.Charname, 100, 100, 4240, 100, 100);
+            var player = this.CreatureFactory.Create(this, CreatureType.Player, new PlayerMetadata(playerRecord.Charname, 100, 100, 100, 100, 4240)) as Player;
 
             // TODO: check if map.CanAddCreature(playerRecord.location);
             // playerRecord.location
             IThing playerThing = player;
-            this.Map[Server.Map.Map.VeteranStart].AddThing(ref playerThing);
+            this.map[this.map.VeteranStart].AddThing(ref playerThing);
 
-            this.NotifySpectatingPlayers(conn => new CreatureAddedNotification(conn, player, EffectT.BubbleBlue), player.Location);
+            this.NotifySpectatingPlayers(conn => new CreatureAddedNotification(player.Id, player, AnimatedEffect.BubbleBlue), player.Location);
 
-            this.Connections.TryAdd(player.CreatureId, connection);
+            this.ConnectionManager.Register(connection);
 
-            if (!this.Creatures.TryAdd(player.CreatureId, player))
+            if (!this.creatureMap.TryAdd(player.Id, player))
             {
                 // TODO: proper logging
                 Console.WriteLine($"WARNING: Failed to add {player.Name} to the global dictionary.");
@@ -905,36 +943,14 @@ namespace OpenTibia.Server
             return player;
         }
 
-        internal bool AttemptLogout(IPlayer player)
-        {
-            if (player == null || !player.CanLogout)
-            {
-                return false;
-            }
-
-            // TODO: stuff missing?
-            var oldStackpos = player.Tile.GetStackPosition(player);
-
-            IThing playerThing = player;
-            player.Tile.RemoveThing(ref playerThing);
-
-            this.NotifySpectatingPlayers(conn => new CreatureRemovedNotification(conn, player, oldStackpos, EffectT.Puff), player.Location);
-
-            Creature creature;
-            this.Creatures.TryRemove(player.CreatureId, out creature);
-
-            Connection connection;
-            return this.Connections.TryRemove(player.CreatureId, out connection);
-        }
-
         internal byte[] GetMapDescriptionAt(IPlayer forPlayer, Location location)
         {
-            return this.Map.GetDescription(forPlayer, (ushort)(location.X - 8), (ushort)(location.Y - 6), location.Z, location.IsUnderground).ToArray(); // TODO: handle near top left of map edge case.
+            return this.map.GetDescription(forPlayer, (ushort)(location.X - 8), (ushort)(location.Y - 6), location.Z, location.IsUnderground).ToArray(); // TODO: handle near top left of map edge case.
         }
 
         internal byte[] GetMapDescription(IPlayer player, ushort fromX, ushort fromY, sbyte currentZ, bool isUnderground, byte windowSizeX, byte windowSizeY)
         {
-            return this.Map.GetDescription(player, fromX, fromY, currentZ, isUnderground, windowSizeX, windowSizeY).ToArray();
+            return this.map.GetDescription(player, fromX, fromY, currentZ, isUnderground, windowSizeX, windowSizeY).ToArray();
         }
 
         internal byte[] GetMapFloorsDescription(IPlayer forPlayer, ushort fromX, ushort fromY, short startZ, short endZ, byte windowSizeX, byte windowSizeY, int startingOffsetZ = 0)
@@ -951,7 +967,7 @@ namespace OpenTibia.Server
 
             for (int currentZ = startZ; currentZ != endZ + stepZ; currentZ += stepZ)
             {
-                totalBytes.AddRange(this.Map.GetFloorDescription(forPlayer, fromX, fromY, (sbyte)currentZ, windowSizeX, windowSizeY, startZ - currentZ + startingOffsetZ, ref skip));
+                totalBytes.AddRange(this.map.GetFloorDescription(forPlayer, fromX, fromY, (sbyte)currentZ, windowSizeX, windowSizeY, startZ - currentZ + startingOffsetZ, ref skip));
             }
 
             if (skip >= 0)
@@ -963,7 +979,7 @@ namespace OpenTibia.Server
             return totalBytes.ToArray();
         }
 
-        internal bool RequestCreatureWalkToDirection(ICreature creature, Direction direction, TimeSpan delay = default(TimeSpan))
+        internal bool RequestCreatureWalkToDirection(ICreature creature, Direction direction, TimeSpan delay = default)
         {
             var fromLoc = creature.Location;
             var toLoc = fromLoc;
@@ -1000,7 +1016,7 @@ namespace OpenTibia.Server
                     break;
             }
 
-            var movement = new CreatureMovementOnMap(creature.CreatureId, creature, fromLoc, toLoc);
+            var movement = new CreatureMovementOnMap(creature.Id, creature, fromLoc, toLoc);
 
             return this.ScheduleEvent(movement, delay);
         }
@@ -1021,7 +1037,7 @@ namespace OpenTibia.Server
                     {
                         var monsterId = Convert.ToUInt16(testStrObjs[1]);
 
-                        Task.Factory.StartNew(() => Functions.MonsterOnMap(player.LocationInFront, monsterId), this.CancelToken);
+                        this.ScriptFactory.MonsterOnMap(this, player.LocationInFront, monsterId);
                     }
 
                     break;
@@ -1034,9 +1050,7 @@ namespace OpenTibia.Server
 
             foreach (var peekerId in interestedCreatureIds)
             {
-                var peeker = this.GetCreatureWithId(peekerId) as IPlayer;
-
-                if (peeker == null)
+                if (!(this.FindCreatureById(peekerId) is IPlayer peeker))
                 {
                     continue;
                 }
@@ -1045,15 +1059,15 @@ namespace OpenTibia.Server
                 {
                     default:
                         // update
-                        this.NotifySinglePlayer(peeker, conn => new GenericNotification(conn, new ContainerUpdateItemPacket { ContainerId = (byte)container.GetIdFor(peekerId), Index = index, Item = item }));
+                        this.NotifySinglePlayer(peeker, conn => new GenericNotification(this.ConnectionManager.GetAllActive, new GenericNotificationArguments(new ContainerUpdateItemPacket(index, (byte)container.GetIdFor(peekerId), item)), peekerId));
                         break;
                     case -1:
                         // remove
-                        this.NotifySinglePlayer(peeker, conn => new GenericNotification(conn, new ContainerRemoveItemPacket { ContainerId = (byte)container.GetIdFor(peekerId), Index = index }));
+                        this.NotifySinglePlayer(peeker, conn => new GenericNotification(this.ConnectionManager.GetAllActive, new GenericNotificationArguments(new ContainerRemoveItemPacket(index, (byte)container.GetIdFor(peekerId))), peekerId));
                         break;
                     case 1:
                         // add
-                        this.NotifySinglePlayer(peeker, conn => new GenericNotification(conn, new ContainerAddItemPacket { ContainerId = (byte)container.GetIdFor(peekerId), Item = item }));
+                        this.NotifySinglePlayer(peeker, conn => new GenericNotification(this.ConnectionManager.GetAllActive, new GenericNotificationArguments(new ContainerAddItemPacket((byte)container.GetIdFor(peekerId), item)), peekerId));
                         break;
                 }
             }
@@ -1061,54 +1075,60 @@ namespace OpenTibia.Server
 
         public void OnContainerContentUpdated(IContainer container, byte index, IItem item)
         {
-            if (container == null)
-            {
-                throw new ArgumentNullException(nameof(container));
-            }
-
-            if (item == null)
-            {
-                throw new ArgumentNullException(nameof(item));
-            }
+            container.ThrowIfNull(nameof(container));
+            item.ThrowIfNull(nameof(item));
 
             this.OnContainerContentEvent(0, container, index, item);
         }
 
         public void OnContainerContentAdded(IContainer container, IItem item)
         {
-            if (container == null)
-            {
-                throw new ArgumentNullException(nameof(container));
-            }
-
-            if (item == null)
-            {
-                throw new ArgumentNullException(nameof(item));
-            }
+            container.ThrowIfNull(nameof(container));
+            item.ThrowIfNull(nameof(item));
 
             this.OnContainerContentEvent(1, container, 0xFF, item);
         }
 
         public void OnContainerContentRemoved(IContainer container, byte index)
         {
-            if (container == null)
-            {
-                throw new ArgumentNullException(nameof(container));
-            }
+            container.ThrowIfNull(nameof(container));
 
             this.OnContainerContentEvent(-1, container, index, null);
         }
 
-        public ICreature GetCreatureWithId(uint creatureId)
+        public void RegisterCreature(ICreature creature)
+        {
+            creature.ThrowIfNull(nameof(creature));
+
+            if (!this.creatureMap.TryAdd(creature.Id, creature))
+            {
+                // TODO: proper logging
+                Console.WriteLine($"WARNING: Failed to add {creature.Name} ({creature.Id}) to the creatue manager.");
+            }
+        }
+
+        public void UnregisterCreature(ICreature creature)
+        {
+            creature.ThrowIfNull(nameof(creature));
+
+            this.creatureMap.TryRemove(creature.Id, out _);
+        }
+
+        public ICreature FindCreatureById(Guid creatureId)
         {
             try
             {
-                return this.Creatures[creatureId];
+                return this.creatureMap[creatureId];
             }
             catch
             {
                 return null;
             }
+        }
+
+        public IEnumerable<ICreature> GetAllCreatures()
+        {
+            return this.creatureMap.Values;
         }
     }
 }

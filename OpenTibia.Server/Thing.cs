@@ -6,8 +6,9 @@
 
 namespace OpenTibia.Server
 {
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Server.Contracts;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
 
     public abstract class Thing : IThing
     {

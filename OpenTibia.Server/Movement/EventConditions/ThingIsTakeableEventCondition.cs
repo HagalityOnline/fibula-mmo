@@ -6,9 +6,8 @@
 
 namespace OpenTibia.Server.Movement.EventConditions
 {
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Abstractions;
 
     /// <summary>
     /// Class that represents an event condition that evaluates if a thing is takeable.
@@ -49,10 +48,8 @@ namespace OpenTibia.Server.Movement.EventConditions
                 return false;
             }
 
-            var item = this.Thing as IItem;
-
             // TODO: GrabberId access level?
-            return item != null && item.Type.Flags.Contains(ItemFlag.Take);
+            return this.Thing is IItem item && item.Type.Flags.Contains(ItemFlag.Take);
         }
     }
 }

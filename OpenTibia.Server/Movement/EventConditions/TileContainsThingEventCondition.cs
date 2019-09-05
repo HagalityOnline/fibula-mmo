@@ -7,9 +7,9 @@
 namespace OpenTibia.Server.Movement.EventConditions
 {
     using System;
-    using OpenTibia.Scheduling.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
-    using OpenTibia.Server.Data.Models.Structs;
+    using OpenTibia.Scheduling.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
 
     /// <summary>
     /// Class that represents an event condition that evaluates whether a tile in a location contains the specified thing.

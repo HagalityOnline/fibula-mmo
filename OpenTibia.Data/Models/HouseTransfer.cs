@@ -14,14 +14,14 @@ namespace OpenTibia.Data.Models
     public class HouseTransfer : IHouseTransfer
     {
         [Key]
-        public long Id { get; set; }
+        public long Id { get; }
 
-        public short HouseId { get; set; }
+        public short HouseId { get; }
 
-        public int TransferTo { get; set; }
+        public int TransferTo { get; }
 
-        public long Gold { get; set; }
+        public long Gold { get; }
 
-        public byte Done { get; set; }
+        public byte Done { get; }
     }
 }

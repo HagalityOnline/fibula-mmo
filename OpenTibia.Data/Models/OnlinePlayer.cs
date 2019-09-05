@@ -14,10 +14,10 @@ namespace OpenTibia.Data.Models
     public class OnlinePlayer : IOnlinePlayer
     {
         [Key]
-        public string Name { get; set; }
+        public string Name { get; }
 
-        public int Level { get; set; }
+        public int Level { get; }
 
-        public string Vocation { get; set; }
+        public string Vocation { get; }
     }
 }

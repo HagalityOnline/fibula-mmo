@@ -14,38 +14,38 @@ namespace OpenTibia.Data.Models
     public class Guild : IGuild
     {
         [Key]
-        public short GuildId { get; set; }
+        public short GuildId { get; }
 
-        public string GuildName { get; set; }
+        public string GuildName { get; }
 
-        public int GuildOwner { get; set; }
+        public int GuildOwner { get; }
 
-        public string Description { get; set; }
+        public string Description { get; }
 
-        public int Ts { get; set; }
+        public int Ts { get; }
 
-        public byte Ranks { get; set; }
+        public byte Ranks { get; }
 
-        public string Rank1 { get; set; }
+        public string Rank1 { get; }
 
-        public string Rank2 { get; set; }
+        public string Rank2 { get; }
 
-        public string Rank3 { get; set; }
+        public string Rank3 { get; }
 
-        public string Rank4 { get; set; }
+        public string Rank4 { get; }
 
-        public string Rank5 { get; set; }
+        public string Rank5 { get; }
 
-        public string Rank6 { get; set; }
+        public string Rank6 { get; }
 
-        public string Rank7 { get; set; }
+        public string Rank7 { get; }
 
-        public string Rank8 { get; set; }
+        public string Rank8 { get; }
 
-        public string Rank9 { get; set; }
+        public string Rank9 { get; }
 
-        public string Rank10 { get; set; }
+        public string Rank10 { get; }
 
-        public string Logo { get; set; }
+        public string Logo { get; }
     }
 }

@@ -6,60 +6,49 @@
 
 namespace OpenTibia.Server.Notifications
 {
-    using System;
-    using OpenTibia.Communications;
+    using OpenTibia.Common.Helpers;
     using OpenTibia.Communications.Packets.Outgoing;
-    using OpenTibia.Data.Contracts;
-    using OpenTibia.Server.Data.Interfaces;
+    using OpenTibia.Data.Contracts.Enumerations;
+    using OpenTibia.Server.Contracts.Abstractions;
 
-    internal class CreatureAddedNotification : Notification
+    /// <summary>
+    /// Class that represents a notification for creature being added in sight to players who are close.
+    /// </summary>
+    internal class CreatureAddedNotification : ProximityNotification
     {
-        public ICreature Creature { get; }
-
-        public EffectT AddedEffect { get; }
-
-        public CreatureAddedNotification(Connection connection, ICreature creature, EffectT addEffect = EffectT.None)
-            : base(connection)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CreatureAddedNotification"/> class.
+        /// </summary>
+        /// <param name="arguments">The arguments for this notification.</param>
+        public CreatureAddedNotification(CreatureAddedNotificationArguments arguments)
+            : base(arguments?.Location ?? default)
         {
-            if (creature == null)
-            {
-                throw new ArgumentNullException(nameof(creature));
-            }
+            arguments.ThrowIfNull(nameof(arguments));
 
-            this.Creature = creature;
-            this.AddedEffect = addEffect;
+            this.Arguments = arguments;
         }
 
+        /// <summary>
+        /// Gets this notification's arguments.
+        /// </summary>
+        public CreatureAddedNotificationArguments Arguments { get; }
+
+        /// <summary>
+        /// Finalizes the notification in preparation to it being sent.
+        /// </summary>
         public override void Prepare()
         {
-            if (this.Creature.CreatureId == this.Connection.PlayerId)
+            if (!(Game.Instance.GetCreatureWithId(this.PlayerId) is IPlayer player))
             {
                 return;
             }
 
-            var player = Game.Instance.GetCreatureWithId(this.Connection.PlayerId) as IPlayer;
-
-            if (player == null)
+            if (this.Arguments.AddedEffect != AnimatedEffect.None)
             {
-                return;
+                this.Packets.Add(new MagicEffectPacket(this.Arguments.Creature.Location, this.Arguments.AddedEffect));
             }
 
-            if (this.AddedEffect != EffectT.None)
-            {
-                this.ResponsePackets.Add(new MagicEffectPacket
-                {
-                    Effect = this.AddedEffect,
-                    Location = this.Creature.Location
-                });
-            }
-
-            this.ResponsePackets.Add(new AddCreaturePacket
-            {
-                Creature = this.Creature,
-                Location = this.Creature.Location,
-                AsKnown = player.KnowsCreatureWithId(this.Creature.CreatureId),
-                RemoveThisCreatureId = player.ChooseToRemoveFromKnownSet()
-            });
+            this.Packets.Add(new AddCreaturePacket(this.Arguments.Creature, player.KnowsCreatureWithId(this.Arguments.Creature.Id), player.ChooseToRemoveFromKnownSet()));
         }
     }
 }
