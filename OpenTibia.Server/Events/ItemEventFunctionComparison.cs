@@ -6,6 +6,7 @@
 
 namespace OpenTibia.Server.Events
 {
+    using OpenTibia.Data.Contracts.Enumerations;
     using OpenTibia.Server.Contracts.Abstractions;
 
     internal class ItemEventFunctionComparison : IItemEventFunction

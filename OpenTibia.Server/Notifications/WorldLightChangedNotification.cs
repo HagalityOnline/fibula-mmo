@@ -15,18 +15,19 @@ namespace OpenTibia.Server.Notifications
     /// <summary>
     /// Class that represents a notification to all players that world light has changed.
     /// </summary>
-    internal class WorldLightChangedNotification : AllPlayersNotification
+    internal class WorldLightChangedNotification : Notification
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="WorldLightChangedNotification"/> class.
         /// </summary>
-        /// <param name="targetConnectionsFunc">A reference to determine the target connections of this notification.</param>
+        /// <param name="determineTargetConnectionsFunction">A function to determine the target connections of this notification.</param>
         /// <param name="arguments">The arguments for this notification.</param>
-        public WorldLightChangedNotification(Func<IEnumerable<IConnection>> targetConnectionsFunc, WorldLightChangedNotificationArguments arguments)
-            : base(targetConnectionsFunc)
+        public WorldLightChangedNotification(Func<IEnumerable<IConnection>> determineTargetConnectionsFunction, WorldLightChangedNotificationArguments arguments)
         {
+            determineTargetConnectionsFunction.ThrowIfNull(nameof(determineTargetConnectionsFunction));
             arguments.ThrowIfNull(nameof(arguments));
 
+            this.TargetConnectionsFunction = determineTargetConnectionsFunction;
             this.Arguments = arguments;
         }
 
@@ -36,9 +37,14 @@ namespace OpenTibia.Server.Notifications
         public WorldLightChangedNotificationArguments Arguments { get; }
 
         /// <summary>
+        /// Gets the function for determining target connections for this notification.
+        /// </summary>
+        protected override Func<IEnumerable<IConnection>> TargetConnectionsFunction { get; }
+
+        /// <summary>
         /// Finalizes the notification in preparation to it being sent.
         /// </summary>
-        public override void Prepare()
+        protected override void Prepare()
         {
             this.Packets.Add(new WorldLightPacket(this.Arguments.LightLevel, this.Arguments.LightColor));
         }

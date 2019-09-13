@@ -42,7 +42,7 @@ namespace OpenTibia.Server.Factories
                     {
                         return new Player(
                             gameInstance,
-                            (uint)new Random(DateTimeOffset.Now.Millisecond).Next(), // TODO: actual random or player Id here?
+                            Guid.NewGuid(), // TODO: actual random or player Id here?
                             playerMetadata.Name,
                             playerMetadata.MaxHitpoints,
                             playerMetadata.MaxManapoints,

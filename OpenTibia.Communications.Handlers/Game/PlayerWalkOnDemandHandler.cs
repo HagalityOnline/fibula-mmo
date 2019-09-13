@@ -19,13 +19,16 @@ namespace OpenTibia.Communications.Handlers.Game
         /// Initializes a new instance of the <see cref="PlayerWalkOnDemandHandler"/> class.
         /// </summary>
         /// <param name="gameInstance">A reference to the game instance.</param>
-        /// <param name="direction"></param>
+        /// <param name="direction">The direction to walk to.</param>
         public PlayerWalkOnDemandHandler(IGame gameInstance, Direction direction)
             : base(gameInstance)
         {
             this.Direction = direction;
         }
 
+        /// <summary>
+        /// Gets the direction to walk to.
+        /// </summary>
         public Direction Direction { get; }
 
         /// <summary>

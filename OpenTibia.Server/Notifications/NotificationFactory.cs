@@ -9,6 +9,7 @@
 namespace OpenTibia.Server.Notifications
 {
     using System;
+    using System.Linq;
     using OpenTibia.Common.Helpers;
     using OpenTibia.Communications.Contracts.Abstractions;
     using OpenTibia.Server.Contracts.Abstractions;
@@ -23,15 +24,24 @@ namespace OpenTibia.Server.Notifications
         /// Initializes a new instance of the <see cref="NotificationFactory"/> class.
         /// </summary>
         /// <param name="connectionManager">A reference to the connection manager.</param>
-        public NotificationFactory(IConnectionManager connectionManager)
+        /// <param name="creatureFinder">A reference to the creature manager.</param>
+        public NotificationFactory(
+            IConnectionManager connectionManager,
+            ICreatureFinder creatureFinder)
         {
             this.ConnectionManager = connectionManager;
+            this.CreatureFinder = creatureFinder;
         }
 
         /// <summary>
         /// Gets the reference to the connection manager.
         /// </summary>
         public IConnectionManager ConnectionManager { get; }
+
+        /// <summary>
+        /// Gets the reference to the creature finder.
+        /// </summary>
+        public ICreatureFinder CreatureFinder { get; }
 
         /// <summary>
         /// Creates a new notification based on the type and arguments supplied.
@@ -49,7 +59,9 @@ namespace OpenTibia.Server.Notifications
 
                     if (notificationArguments is GenericNotificationArguments genericNotificationArguments)
                     {
-                        return new GenericNotification(this.ConnectionManager.GetAllActive, genericNotificationArguments);
+                        return new GenericNotification(
+                            () => this.ConnectionManager.GetAllActive().Where(c => genericNotificationArguments.PlayerIds.Contains(c.PlayerId)),
+                            genericNotificationArguments);
                     }
 
                     break;
@@ -57,7 +69,9 @@ namespace OpenTibia.Server.Notifications
 
                     if (notificationArguments is AnimatedTextNotificationArguments animatedTextNotificationArguments)
                     {
-                        return new AnimatedTextNotification(animatedTextNotificationArguments);
+                        return new AnimatedTextNotification(
+                            () => this.ConnectionManager.GetAllActive().Where(c => this.CreatureFinder.FindCreatureById(c.PlayerId)?.CanSee(animatedTextNotificationArguments.Location) ?? false),
+                            animatedTextNotificationArguments);
                     }
 
                     break;
@@ -65,7 +79,10 @@ namespace OpenTibia.Server.Notifications
 
                     if (notificationArguments is CreatureAddedNotificationArguments creatureAddedNotificationArguments)
                     {
-                        return new CreatureAddedNotification(creatureAddedNotificationArguments);
+                        return new CreatureAddedNotification(
+                            this.CreatureFinder,
+                            () => this.ConnectionManager.GetAllActive().Where(c => this.CreatureFinder.FindCreatureById(c.PlayerId)?.CanSee(creatureAddedNotificationArguments.Creature) ?? false),
+                            creatureAddedNotificationArguments);
                     }
 
                     break;
@@ -73,7 +90,9 @@ namespace OpenTibia.Server.Notifications
 
                     if (notificationArguments is CreatureChangedOutfitNotificationArguments creatureChangedOutfitNotificationArguments)
                     {
-                        return new CreatureChangedOutfitNotification(creatureChangedOutfitNotificationArguments);
+                        return new CreatureChangedOutfitNotification(
+                            () => this.ConnectionManager.GetAllActive().Where(c => this.CreatureFinder.FindCreatureById(c.PlayerId)?.CanSee(creatureChangedOutfitNotificationArguments.Creature) ?? false),
+                            creatureChangedOutfitNotificationArguments);
                     }
 
                     break;
@@ -81,7 +100,9 @@ namespace OpenTibia.Server.Notifications
 
                     if (notificationArguments is CreatureMovedNotificationArguments creatureMovedNotificationArguments)
                     {
-                        return new CreatureMovedNotification(creatureMovedNotificationArguments);
+                        return new CreatureMovedNotification(
+                            () => this.ConnectionManager.GetAllActive().Where(c => this.CreatureFinder.FindCreatureById(c.PlayerId)?.CanSee(creatureMovedNotificationArguments.Location) ?? false),
+                            creatureMovedNotificationArguments);
                     }
 
                     break;
@@ -89,7 +110,9 @@ namespace OpenTibia.Server.Notifications
 
                     if (notificationArguments is CreatureRemovedNotificationArguments creatureRemovedNotificationArguments)
                     {
-                        return new CreatureRemovedNotification(creatureRemovedNotificationArguments);
+                        return new CreatureRemovedNotification(
+                            () => this.ConnectionManager.GetAllActive().Where(c => this.CreatureFinder.FindCreatureById(c.PlayerId)?.CanSee(creatureRemovedNotificationArguments.Creature) ?? false),
+                            creatureRemovedNotificationArguments);
                     }
 
                     break;
@@ -97,7 +120,9 @@ namespace OpenTibia.Server.Notifications
 
                     if (notificationArguments is CreatureSpokeNotificationArguments creatureSpokeNotificationArguments)
                     {
-                        return new CreatureSpokeNotification(creatureSpokeNotificationArguments);
+                        return new CreatureSpokeNotification(
+                            () => this.ConnectionManager.GetAllActive().Where(c => this.CreatureFinder.FindCreatureById(c.PlayerId)?.CanSee(creatureSpokeNotificationArguments.Creature) ?? false),
+                            creatureSpokeNotificationArguments);
                     }
 
                     break;
@@ -105,7 +130,9 @@ namespace OpenTibia.Server.Notifications
 
                     if (notificationArguments is CreatureTurnedNotificationArguments creatureTurnedNotificationArguments)
                     {
-                        return new CreatureTurnedNotification(creatureTurnedNotificationArguments);
+                        return new CreatureTurnedNotification(
+                            () => this.ConnectionManager.GetAllActive().Where(c => this.CreatureFinder.FindCreatureById(c.PlayerId)?.CanSee(creatureTurnedNotificationArguments.Creature) ?? false),
+                            creatureTurnedNotificationArguments);
                     }
 
                     break;
@@ -113,7 +140,9 @@ namespace OpenTibia.Server.Notifications
 
                     if (notificationArguments is ItemMovedNotificationArguments itemMovedNotificationArguments)
                     {
-                        return new ItemMovedNotification(itemMovedNotificationArguments);
+                        return new ItemMovedNotification(
+                            () => this.ConnectionManager.GetAllActive().Where(c => this.CreatureFinder.FindCreatureById(c.PlayerId)?.CanSee(itemMovedNotificationArguments.Location) ?? false),
+                            itemMovedNotificationArguments);
                     }
 
                     break;
@@ -121,7 +150,9 @@ namespace OpenTibia.Server.Notifications
 
                     if (notificationArguments is TileUpdatedNotificationArguments tileUpdatedNotificationArguments)
                     {
-                        return new TileUpdatedNotification(tileUpdatedNotificationArguments);
+                        return new TileUpdatedNotification(
+                            () => this.ConnectionManager.GetAllActive().Where(c => this.CreatureFinder.FindCreatureById(c.PlayerId)?.CanSee(tileUpdatedNotificationArguments.Location) ?? false),
+                            tileUpdatedNotificationArguments);
                     }
 
                     break;

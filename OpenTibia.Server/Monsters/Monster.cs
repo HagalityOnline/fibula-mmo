@@ -35,7 +35,7 @@ namespace OpenTibia.Server.Monsters
         /// <param name="gameInstance"></param>
         /// <param name="monsterType"></param>
         public Monster(IGame gameInstance, MonsterType monsterType)
-            : base(gameInstance, GetNewId(), monsterType.Name, monsterType.Article, monsterType.MaxHitPoints, monsterType.MaxManaPoints, monsterType.Corpse)
+            : base(gameInstance, Guid.NewGuid(), monsterType.Name, monsterType.Article, monsterType.MaxHitPoints, monsterType.MaxManaPoints, monsterType.Corpse)
         {
             this.Type = monsterType;
             this.Experience = monsterType.Experience;

@@ -6,7 +6,10 @@
 
 namespace OpenTibia.Server.Notifications
 {
+    using System;
+    using System.Collections.Generic;
     using OpenTibia.Common.Helpers;
+    using OpenTibia.Communications.Contracts.Abstractions;
     using OpenTibia.Communications.Packets.Outgoing;
 
     internal class ItemMovedNotification : Notification
@@ -14,12 +17,14 @@ namespace OpenTibia.Server.Notifications
         /// <summary>
         /// Initializes a new instance of the <see cref="ItemMovedNotification"/> class.
         /// </summary>
+        /// <param name="determineTargetConnectionsFunction">A function to determine the target connections of this notification.</param>
         /// <param name="arguments">The arguments for this notification.</param>
-        public ItemMovedNotification(ItemMovedNotificationArguments arguments)
-            : base(audience, playerId)
+        public ItemMovedNotification(Func<IEnumerable<IConnection>> determineTargetConnectionsFunction, ItemMovedNotificationArguments arguments)
         {
+            determineTargetConnectionsFunction.ThrowIfNull(nameof(determineTargetConnectionsFunction));
             arguments.ThrowIfNull(nameof(arguments));
 
+            this.TargetConnectionsFunction = determineTargetConnectionsFunction;
             this.Arguments = arguments;
         }
 
@@ -28,7 +33,15 @@ namespace OpenTibia.Server.Notifications
         /// </summary>
         public ItemMovedNotificationArguments Arguments { get; }
 
-        public override void Prepare()
+        /// <summary>
+        /// Gets the function for determining target connections for this notification.
+        /// </summary>
+        protected override Func<IEnumerable<IConnection>> TargetConnectionsFunction { get; }
+
+        /// <summary>
+        /// Finalizes the notification in preparation to it being sent.
+        /// </summary>
+        protected override void Prepare()
         {
             var player = Game.Instance.GetCreatureWithId(this.Arguments.PlayerId);
 

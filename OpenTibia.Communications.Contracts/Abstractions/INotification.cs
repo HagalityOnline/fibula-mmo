@@ -18,10 +18,5 @@ namespace OpenTibia.Communications.Contracts.Abstractions
         /// Gets the packets that must be send as part of this notification.
         /// </summary>
         IList<IOutgoingPacket> Packets { get; }
-
-        /// <summary>
-        /// Finalizes the notification in preparation for it to be sent.
-        /// </summary>
-        void Prepare();
     }
 }

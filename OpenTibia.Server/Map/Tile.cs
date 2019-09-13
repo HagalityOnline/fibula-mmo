@@ -18,195 +18,259 @@ namespace OpenTibia.Server.Map
     using OpenTibia.Server.Items;
     using OpenTibia.Server.Parsing;
 
+    /// <summary>
+    /// Class that represents a tile in the map.
+    /// </summary>
     public class Tile : ITile
     {
-        private readonly Stack<uint> creatureIdsOnTile;
+        /// <summary>
+        /// The maximum number of things to describe.
+        /// </summary>
+        private const int MaximumNumberOfThingsToDescribe = 9;
 
+        /// <summary>
+        /// Stores the ids of the creatures in the tile.
+        /// </summary>
+        private readonly Stack<Guid> creatureIdsOnTile;
+
+        /// <summary>
+        /// Stores the 'top' items on the tile.
+        /// </summary>
         private readonly Stack<IItem> topItems1OnTile;
 
+        /// <summary>
+        /// Stores the 'top 2' items on the tile.
+        /// </summary>
         private readonly Stack<IItem> topItems2OnTile;
 
+        /// <summary>
+        /// Stores the down items on the tile.
+        /// </summary>
         private readonly Stack<IItem> downItemsOnTile;
 
+        /// <summary>
+        /// Stores the content cache for this tile.
+        /// </summary>
+        private readonly IDictionary<string, object> contentCache;
+
+        /// <summary>
+        /// A lock to semaphore the content cache generation.
+        /// </summary>
+        private readonly object contentCacheLock;
+
+        /// <summary>
+        /// Stores the last time that this tile's content was edited.
+        /// </summary>
+        private DateTimeOffset contentLastEditionTime;
+
+        /// <summary>
+        /// Stores the last time that this tile's content cache was generated.
+        /// </summary>
+        private DateTimeOffset contentCacheGenerationTime;
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Tile"/> class.
+        /// </summary>
+        /// <param name="creatureFinder">A reference to the creature finder.</param>
+        /// <param name="x">The X coordinate of the tile.</param>
+        /// <param name="y">The Y coordinate of the tile.</param>
+        /// <param name="z">The Z coordinate of the tile.</param>
+        public Tile(ICreatureFinder creatureFinder, ushort x, ushort y, sbyte z)
+            : this(creatureFinder, new Location { X = x, Y = y, Z = z })
+        {
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Tile"/> class.
+        /// </summary>
+        /// <param name="creatureFinder">A reference to the creature finder.</param>
+        /// <param name="location">The location of the tile.</param>
+        public Tile(ICreatureFinder creatureFinder, Location location)
+        {
+            creatureFinder.ThrowIfNull(nameof(creatureFinder));
+
+            this.CreatureFinder = creatureFinder;
+            this.Location = location;
+
+            this.creatureIdsOnTile = new Stack<Guid>();
+            this.topItems1OnTile = new Stack<IItem>();
+            this.topItems2OnTile = new Stack<IItem>();
+            this.downItemsOnTile = new Stack<IItem>();
+
+            this.contentCache = new Dictionary<string, object>();
+            this.contentCacheLock = new object();
+        }
+
+        /// <summary>
+        /// Gets the creature finder to use.
+        /// </summary>
+        public ICreatureFinder CreatureFinder { get; }
+
+        /// <summary>
+        /// Gets the tile's location.
+        /// </summary>
         public Location Location { get; }
 
+        /// <summary>
+        /// Gets the tile's flags.
+        /// </summary>
         public byte Flags { get; private set; }
 
-        public IItem Ground { get; set; }
+        /// <summary>
+        /// Gets the tile's ground.
+        /// </summary>
+        public IItem Ground { get; private set; }
 
-        public IEnumerable<uint> CreatureIds => this.creatureIdsOnTile;
+        /// <summary>
+        /// Gets the tile's creature ids.
+        /// </summary>
+        public IEnumerable<Guid> CreatureIds => this.creatureIdsOnTile;
 
+        /// <summary>
+        /// Gets the tile's 'top' items.
+        /// </summary>
         public IEnumerable<IItem> TopItems1 => this.topItems1OnTile;
 
+        /// <summary>
+        /// Gets the tile's 'top 2' items.
+        /// </summary>
         public IEnumerable<IItem> TopItems2 => this.topItems2OnTile;
 
+        /// <summary>
+        /// Gets the tile's down items.
+        /// </summary>
         public IEnumerable<IItem> DownItems => this.downItemsOnTile;
 
+        /// <summary>
+        /// Gets a value indicating whether this tile has events that are triggered via collision evaluation.
+        /// </summary>
         public bool HasCollisionEvents
         {
             get
             {
-                return (this.Ground != null && this.Ground.HasCollision) || this.TopItems1.Any(i => i.HasCollision) || this.TopItems2.Any(i => i.HasCollision) || this.DownItems.Any(i => i.HasCollision);
-            }
-        }
-
-        public IEnumerable<IItem> ItemsWithCollision
-        {
-            get
-            {
-                var items = new List<IItem>();
-
-                if (this.Ground.HasCollision)
+                if (this.contentLastEditionTime < this.contentCacheGenerationTime)
                 {
-                    items.Add(this.Ground);
+                    // the cache content is no longer current, so we need to regenerate the cached content.
+                    this.RegenerateContentCache();
                 }
 
-                items.AddRange(this.TopItems1.Where(i => i.HasCollision));
-                items.AddRange(this.TopItems2.Where(i => i.HasCollision));
-                items.AddRange(this.DownItems.Where(i => i.HasCollision));
-
-                return items;
+                return (bool)this.contentCache[nameof(this.HasCollisionEvents)];
             }
         }
 
+        /// <summary>
+        /// Gets a value indicating whether this tile has events that are triggered via separation events.
+        /// </summary>
         public bool HasSeparationEvents
         {
             get
             {
-                return (this.Ground != null && this.Ground.HasSeparation) || this.TopItems1.Any(i => i.HasSeparation) || this.TopItems2.Any(i => i.HasSeparation) || this.DownItems.Any(i => i.HasSeparation);
+                if (this.contentLastEditionTime < this.contentCacheGenerationTime)
+                {
+                    // the cache content is no longer current, so we need to regenerate the cached content.
+                    this.RegenerateContentCache();
+                }
+
+                return (bool)this.contentCache[nameof(this.HasSeparationEvents)];
             }
         }
 
+        /// <summary>
+        /// Gets a collection of items in the tile that have collition events registered.
+        /// </summary>
+        public IEnumerable<IItem> ItemsWithCollision
+        {
+            get
+            {
+                if (this.contentLastEditionTime < this.contentCacheGenerationTime)
+                {
+                    // the cache content is no longer current, so we need to regenerate the cached content.
+                    this.RegenerateContentCache();
+                }
+
+                return (IEnumerable<IItem>)this.contentCache[nameof(this.ItemsWithCollision)];
+            }
+        }
+
+        /// <summary>
+        /// Gets a collection of items in the tile that have separation events registered.
+        /// </summary>
         public IEnumerable<IItem> ItemsWithSeparation
         {
             get
             {
-                var items = new List<IItem>();
-
-                if (this.Ground.HasSeparation)
+                if (this.contentLastEditionTime < this.contentCacheGenerationTime)
                 {
-                    items.Add(this.Ground);
+                    // the cache content is no longer current, so we need to regenerate the cached content.
+                    this.RegenerateContentCache();
                 }
 
-                items.AddRange(this.TopItems1.Where(i => i.HasSeparation));
-                items.AddRange(this.TopItems2.Where(i => i.HasSeparation));
-                items.AddRange(this.DownItems.Where(i => i.HasSeparation));
-
-                return items;
+                return (IEnumerable<IItem>)this.contentCache[nameof(this.ItemsWithSeparation)];
             }
         }
 
+        /// <summary>
+        /// Gets a value indicating whether this tile is part of a house.
+        /// TODO: implement hosue system.
+        /// </summary>
         public bool IsHouse => false;
 
+        /// <summary>
+        /// Gets a value indicating whether this tile blocks a throw.
+        /// </summary>
         public bool BlocksThrow
         {
             get
             {
-                return (this.Ground != null && this.Ground.BlocksThrow) || this.TopItems1.Any(i => i.BlocksThrow) || this.TopItems2.Any(i => i.BlocksThrow) || this.DownItems.Any(i => i.BlocksThrow);
+                if (this.contentLastEditionTime < this.contentCacheGenerationTime)
+                {
+                    // the cache content is no longer current, so we need to regenerate the cached content.
+                    this.RegenerateContentCache();
+                }
+
+                return (bool)this.contentCache[nameof(this.BlocksThrow)];
             }
         }
 
+        /// <summary>
+        /// Gets a value indicating whether this tile blocks walking it.
+        /// </summary>
         public bool BlocksPass
         {
             get
             {
-                return (this.Ground != null && this.Ground.BlocksPass) || this.CreatureIds.Any() || this.TopItems1.Any(i => i.BlocksPass) || this.TopItems2.Any(i => i.BlocksPass) || this.DownItems.Any(i => i.BlocksPass);
+                if (this.contentLastEditionTime < this.contentCacheGenerationTime)
+                {
+                    // the cache content is no longer current, so we need to regenerate the cached content.
+                    this.RegenerateContentCache();
+                }
+
+                return (bool)this.contentCache[nameof(this.BlocksPass)];
             }
         }
 
+        /// <summary>
+        /// Gets a value indicating whether this tile blocks laying items on top of it.
+        /// </summary>
         public bool BlocksLay
         {
             get
             {
-                return (this.Ground != null && this.Ground.BlocksLay) || this.TopItems1.Any(i => i.BlocksLay) || this.TopItems2.Any(i => i.BlocksLay) || this.DownItems.Any(i => i.BlocksLay);
+                if (this.contentLastEditionTime < this.contentCacheGenerationTime)
+                {
+                    // the cache content is no longer current, so we need to regenerate the cached content.
+                    this.RegenerateContentCache();
+                }
+
+                return (bool)this.contentCache[nameof(this.BlocksLay)];
             }
         }
 
-        private byte[] GetItemDescriptionBytes()
-        {
-            // not valid to cache response if there are creatures.
-            if (this.creatureIdsOnTile.Count > 0)
-            {
-                return null;
-            }
-
-            var tempBytes = new List<byte>();
-
-            var count = 0;
-            const int numberOfObjectsLimit = 9;
-
-            if (this.Ground != null)
-            {
-                tempBytes.AddRange(BitConverter.GetBytes(this.Ground.Type.ClientId));
-                count++;
-            }
-
-            foreach (var item in this.TopItems1)
-            {
-                if (count == numberOfObjectsLimit)
-                {
-                    break;
-                }
-
-                tempBytes.AddRange(BitConverter.GetBytes(item.Type.ClientId));
-
-                if (item.IsCumulative)
-                {
-                    tempBytes.Add(item.Amount);
-                }
-                else if (item.IsLiquidPool || item.IsLiquidContainer)
-                {
-                    tempBytes.Add(item.LiquidType);
-                }
-
-                count++;
-            }
-
-            foreach (var item in this.TopItems2)
-            {
-                if (count == numberOfObjectsLimit)
-                {
-                    break;
-                }
-
-                tempBytes.AddRange(BitConverter.GetBytes(item.Type.ClientId));
-
-                if (item.IsCumulative)
-                {
-                    tempBytes.Add(item.Amount);
-                }
-                else if (item.IsLiquidPool || item.IsLiquidContainer)
-                {
-                    tempBytes.Add(item.LiquidType);
-                }
-
-                count++;
-            }
-
-            foreach (var item in this.DownItems)
-            {
-                if (count == numberOfObjectsLimit)
-                {
-                    break;
-                }
-
-                tempBytes.AddRange(BitConverter.GetBytes(item.Type.ClientId));
-
-                if (item.IsCumulative)
-                {
-                    tempBytes.Add(item.Amount);
-                }
-                else if (item.IsLiquidPool || item.IsLiquidContainer)
-                {
-                    tempBytes.Add(item.LiquidType);
-                }
-
-                count++;
-            }
-
-            return tempBytes.ToArray();
-        }
-
+        /// <summary>
+        /// Checks if the tile can be walked, optionally checking for an avoidance of damage type.
+        /// </summary>
+        /// <param name="avoidDamageType">Optional. A damage type to check for and avoid in the determination. Defaults to none.</param>
+        /// <returns>True if the tile can be walked avoiding the damage type, false otherwise.</returns>
         public bool CanBeWalked(byte avoidDamageType = 0)
         {
             return !this.CreatureIds.Any()
@@ -217,6 +281,12 @@ namespace OpenTibia.Server.Map
                 && !this.DownItems.Any(i => i.IsPathBlocking(avoidDamageType));
         }
 
+        /// <summary>
+        /// Checks if the tile has a thing next in line.
+        /// </summary>
+        /// <param name="thing">The thing to check for.</param>
+        /// <param name="count">A count of the thing to check for.</param>
+        /// <returns>True if the thing and count is in the tile, false otherwise.</returns>
         public bool HasThing(IThing thing, byte count = 1)
         {
             if (count == 0)
@@ -233,33 +303,6 @@ namespace OpenTibia.Server.Map
             return creaturesCheck || top1Check || top2Check || downCheck;
         }
 
-        // public static HashSet<string> PropSet = new HashSet<string>();
-
-        // public string LoadedFrom { get; set; }
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Tile"/> class.
-        /// </summary>
-        /// <param name="x"></param>
-        /// <param name="y"></param>
-        /// <param name="z"></param>
-        public Tile(ushort x, ushort y, sbyte z)
-            : this(new Location { X = x, Y = y, Z = z })
-        {
-        }
-
-        /// <summary>
-        /// Initializes a new instance of the <see cref="Tile"/> class.
-        /// </summary>
-        /// <param name="loc"></param>
-        public Tile(Location loc)
-        {
-            this.Location = loc;
-            this.creatureIdsOnTile = new Stack<uint>();
-            this.topItems1OnTile = new Stack<IItem>();
-            this.topItems2OnTile = new Stack<IItem>();
-            this.downItemsOnTile = new Stack<IItem>();
-        }
-
         public void AddThing(ref IThing thing, byte count)
         {
             if (count == 0)
@@ -272,9 +315,6 @@ namespace OpenTibia.Server.Map
                 this.creatureIdsOnTile.Push(creature.Id);
                 creature.Tile = this;
                 creature.Added();
-
-                // invalidate the cache.
-                this.cachedDescription = null;
             }
             else if (thing is Item item)
             {
@@ -332,10 +372,13 @@ namespace OpenTibia.Server.Map
                 }
 
                 item.Tile = this;
-
-                // invalidate the cache.
-                this.cachedDescription = null;
             }
+            else
+            {
+                throw new InvalidCastException("Thing did not cast to either a Creature or Item.");
+            }
+
+            this.contentLastEditionTime = DateTimeOffset.Now;
         }
 
         public void RemoveThing(ref IThing thing, byte count)
@@ -404,77 +447,13 @@ namespace OpenTibia.Server.Map
             }
             else
             {
-                throw new InvalidCastException("Thing did not cast to either a CreatureId or Item.");
+                throw new InvalidCastException("Thing did not cast to either a Creature or Item.");
             }
 
-            // invalidate the cache.
-            this.cachedDescription = null;
+            this.contentLastEditionTime = DateTimeOffset.Now;
         }
 
-        public void RemoveCreature(ICreature c)
-        {
-            var tempStack = new Stack<uint>();
-            ICreature removed = null;
-
-            lock (this.creatureIdsOnTile)
-            {
-                while (removed == null && this.creatureIdsOnTile.Count > 0)
-                {
-                    var temp = this.creatureIdsOnTile.Pop();
-
-                    if (c.Id == temp)
-                    {
-                        removed = c;
-                    }
-                    else
-                    {
-                        tempStack.Push(temp);
-                    }
-                }
-
-                while (tempStack.Count > 0)
-                {
-                    this.creatureIdsOnTile.Push(tempStack.Pop());
-                }
-            }
-
-            // Console.WriteLine($"Removed creature {c.Name} at {this.Location}");
-        }
-
-        private void AddTopItem1(IItem i)
-        {
-            lock (this.topItems1OnTile)
-            {
-                this.topItems1OnTile.Push(i);
-
-                // invalidate the cache.
-                this.cachedDescription = null;
-            }
-        }
-
-        private void AddTopItem2(IItem i)
-        {
-            lock (this.topItems2OnTile)
-            {
-                this.topItems2OnTile.Push(i);
-
-                // invalidate the cache.
-                this.cachedDescription = null;
-            }
-        }
-
-        private void AddDownItem(IItem i)
-        {
-            lock (this.downItemsOnTile)
-            {
-                this.downItemsOnTile.Push(i);
-
-                // invalidate the cache.
-                this.cachedDescription = null;
-            }
-        }
-
-        public void AddContent(object contentObj)
+        public void AddParsedContent(object contentObj)
         {
             if (!(contentObj is IEnumerable<CipElement> content))
             {
@@ -594,38 +573,35 @@ namespace OpenTibia.Server.Map
             var top1ItemStackToReverse = new Stack<IItem>();
             var top2ItemStackToReverse = new Stack<IItem>();
 
-            var keepLooking = true;
             IItem itemFound = null;
 
-            while (keepLooking && this.topItems1OnTile.Count > 0)
+            while (itemFound == null && this.topItems1OnTile.Count > 0)
             {
                 var item = this.topItems1OnTile.Pop();
 
                 if (item.ThingId == id)
                 {
                     itemFound = item;
-                    keepLooking = false;
                     continue;
                 }
 
                 top1ItemStackToReverse.Push(item);
             }
 
-            while (keepLooking && this.topItems2OnTile.Count > 0)
+            while (itemFound == null && this.topItems2OnTile.Count > 0)
             {
                 var item = this.topItems2OnTile.Pop();
 
                 if (item.ThingId == id)
                 {
                     itemFound = item;
-                    keepLooking = false;
                     break;
                 }
 
                 top2ItemStackToReverse.Push(item);
             }
 
-            while (keepLooking && this.downItemsOnTile.Count > 0)
+            while (itemFound == null && this.downItemsOnTile.Count > 0)
             {
                 var item = this.downItemsOnTile.Pop();
 
@@ -706,7 +682,7 @@ namespace OpenTibia.Server.Map
                 {
                     if (++currentPos == stackPosition)
                     {
-                        return Game.Instance.GetCreatureWithId(creatureId);
+                        return this.CreatureFinder.FindCreatureById(creatureId);
                     }
                 }
             }
@@ -766,92 +742,138 @@ namespace OpenTibia.Server.Map
             throw new Exception("Thing not found in tile.");
         }
 
+        /// <summary>
+        /// Sets a flag on this tile.
+        /// </summary>
+        /// <param name="flag">The flag to set.</param>
         public void SetFlag(TileFlag flag)
         {
             this.Flags |= (byte)flag;
         }
 
+        /// <summary>
+        /// Gets the tile description bytes as seen by a player.
+        /// </summary>
+        /// <param name="asPlayer">The player to which the tile is being descripted to.</param>
+        /// <returns>The tile description bytes.</returns>
         public IEnumerable<byte> GetDescription(IPlayer asPlayer)
         {
+            var count = 0;
+
             var tempBytes = new List<byte>();
 
-            var count = 0;
-            const int numberOfObjectsLimit = 9;
+            this.GetFirstPartialDescription(ref tempBytes, ref count);
+            this.GetCreaturesDescription(asPlayer, ref tempBytes, ref count);
+            this.GetSecondPartialDescription(ref tempBytes, ref count);
 
-            if (this.Ground != null)
+            return tempBytes;
+        }
+
+        private void RegenerateContentCache()
+        {
+            lock (this.contentCacheLock)
             {
-                tempBytes.AddRange(BitConverter.GetBytes(this.Ground.Type.ClientId));
-                count++;
+                if (this.contentLastEditionTime < this.contentCacheGenerationTime)
+                {
+                    return;
+                }
+
+                // collision events
+                this.contentCache[nameof(this.HasCollisionEvents)] =
+                    (this.Ground != null && this.Ground.HasCollision) ||
+                    this.TopItems1.Any(i => i.HasCollision) ||
+                    this.TopItems2.Any(i => i.HasCollision) ||
+                    this.DownItems.Any(i => i.HasCollision);
+
+                var items = new List<IItem>();
+
+                if (this.Ground.HasCollision)
+                {
+                    items.Add(this.Ground);
+                }
+
+                items.AddRange(this.TopItems1.Where(i => i.HasCollision));
+                items.AddRange(this.TopItems2.Where(i => i.HasCollision));
+                items.AddRange(this.DownItems.Where(i => i.HasCollision));
+
+                this.contentCache[nameof(this.ItemsWithCollision)] = items;
+
+                // separation events
+                this.contentCache[nameof(this.HasSeparationEvents)] =
+                    (this.Ground != null && this.Ground.HasSeparation) ||
+                    this.TopItems1.Any(i => i.HasSeparation) ||
+                    this.TopItems2.Any(i => i.HasSeparation) ||
+                    this.DownItems.Any(i => i.HasSeparation);
+
+                items = new List<IItem>();
+
+                if (this.Ground.HasSeparation)
+                {
+                    items.Add(this.Ground);
+                }
+
+                items.AddRange(this.TopItems1.Where(i => i.HasSeparation));
+                items.AddRange(this.TopItems2.Where(i => i.HasSeparation));
+                items.AddRange(this.DownItems.Where(i => i.HasSeparation));
+
+                this.contentCache[nameof(this.ItemsWithSeparation)] = items;
+
+                this.contentCache[nameof(this.BlocksThrow)] =
+                    (this.Ground != null && this.Ground.BlocksThrow) ||
+                    this.TopItems1.Any(i => i.BlocksThrow) ||
+                    this.TopItems2.Any(i => i.BlocksThrow) ||
+                    this.DownItems.Any(i => i.BlocksThrow);
+
+                this.contentCache[nameof(this.BlocksPass)] =
+                    (this.Ground != null && this.Ground.BlocksPass) ||
+                    this.CreatureIds.Any() ||
+                    this.TopItems1.Any(i => i.BlocksPass) ||
+                    this.TopItems2.Any(i => i.BlocksPass) ||
+                    this.DownItems.Any(i => i.BlocksPass);
+
+                this.contentCache[nameof(this.BlocksLay)] =
+                    (this.Ground != null && this.Ground.BlocksLay) ||
+                    this.TopItems1.Any(i => i.BlocksLay) ||
+                    this.TopItems2.Any(i => i.BlocksLay) ||
+                    this.DownItems.Any(i => i.BlocksLay);
+
+                // first partial description
+
+                // second partial description
+
+                this.contentCacheGenerationTime = DateTimeOffset.Now;
             }
+        }
 
-            foreach (var item in this.TopItems1)
-            {
-                if (count == numberOfObjectsLimit)
-                {
-                    break;
-                }
-
-                tempBytes.AddRange(BitConverter.GetBytes(item.Type.ClientId));
-
-                if (item.IsCumulative)
-                {
-                    tempBytes.Add(item.Amount);
-                }
-                else if (item.IsLiquidPool || item.IsLiquidContainer)
-                {
-                    tempBytes.Add(item.LiquidType);
-                }
-
-                count++;
-            }
-
-            foreach (var item in this.TopItems2)
-            {
-                if (count == numberOfObjectsLimit)
-                {
-                    break;
-                }
-
-                tempBytes.AddRange(BitConverter.GetBytes(item.Type.ClientId));
-
-                if (item.IsCumulative)
-                {
-                    tempBytes.Add(item.Amount);
-                }
-                else if (item.IsLiquidPool || item.IsLiquidContainer)
-                {
-                    tempBytes.Add(item.LiquidType);
-                }
-
-                count++;
-            }
-
+        private void GetCreaturesDescription(IPlayer asPlayer, ref List<byte> tempBytes, ref int count)
+        {
             foreach (var creatureId in this.CreatureIds)
             {
-                var creature = Game.Instance.GetCreatureWithId(creatureId);
+                if (count == MaximumNumberOfThingsToDescribe)
+                {
+                    break;
+                }
+
+                var creature = this.CreatureFinder.FindCreatureById(creatureId);
 
                 if (creature == null)
                 {
                     continue;
                 }
 
-                if (count == numberOfObjectsLimit)
-                {
-                    break;
-                }
-
                 if (asPlayer.KnowsCreatureWithId(creatureId))
                 {
                     tempBytes.AddRange(BitConverter.GetBytes((ushort)OutgoingGamePacketType.AddKnownCreature));
-                    tempBytes.AddRange(BitConverter.GetBytes(creatureId));
+                    tempBytes.AddRange(BitConverter.GetBytes((uint)creatureId.GetHashCode()));
                 }
                 else
                 {
                     tempBytes.AddRange(BitConverter.GetBytes((ushort)OutgoingGamePacketType.AddUnknownCreature));
                     tempBytes.AddRange(BitConverter.GetBytes(asPlayer.ChooseToRemoveFromKnownSet()));
-                    tempBytes.AddRange(BitConverter.GetBytes(creatureId));
+                    tempBytes.AddRange(BitConverter.GetBytes((uint)creatureId.GetHashCode()));
 
-                    asPlayer.AddKnownCreature(creatureId);
+                    // TODO: is this the best spot for this ?
+                    asPlayer.AddKnownCreature((uint)creatureId.GetHashCode());
 
                     var creatureNameBytes = Encoding.Default.GetBytes(creature.Name);
                     tempBytes.AddRange(BitConverter.GetBytes((ushort)creatureNameBytes.Length));
@@ -892,10 +914,24 @@ namespace OpenTibia.Server.Map
                 tempBytes.Add(creature.Skull);
                 tempBytes.Add(creature.Shield);
             }
+        }
 
-            foreach (var item in this.DownItems)
+        /// <summary>
+        /// Gets the tile's first partial description, which comes from the ground, top and top2 item stacks.
+        /// </summary>
+        /// <param name="tempBytes">A reference to the description bytes.</param>
+        /// <param name="count">A reference to the current count of items described.</param>
+        private void GetFirstPartialDescription(ref List<byte> tempBytes, ref int count)
+        {
+            if (this.Ground != null)
             {
-                if (count == numberOfObjectsLimit)
+                tempBytes.AddRange(BitConverter.GetBytes(this.Ground.Type.ClientId));
+                count++;
+            }
+
+            foreach (var item in this.TopItems1)
+            {
+                if (count == MaximumNumberOfThingsToDescribe)
                 {
                     break;
                 }
@@ -914,7 +950,129 @@ namespace OpenTibia.Server.Map
                 count++;
             }
 
-            return tempBytes;
+            foreach (var item in this.TopItems2)
+            {
+                if (count == MaximumNumberOfThingsToDescribe)
+                {
+                    break;
+                }
+
+                tempBytes.AddRange(BitConverter.GetBytes(item.Type.ClientId));
+
+                if (item.IsCumulative)
+                {
+                    tempBytes.Add(item.Amount);
+                }
+                else if (item.IsLiquidPool || item.IsLiquidContainer)
+                {
+                    tempBytes.Add(item.LiquidType);
+                }
+
+                count++;
+            }
+        }
+
+        /// <summary>
+        /// Gets the tile's second partial description, which comes from the down item stack.
+        /// </summary>
+        /// <param name="tempBytes">A reference to the description bytes.</param>
+        /// <param name="count">A reference to the current count of items described.</param>
+        private void GetSecondPartialDescription(ref List<byte> tempBytes, ref int count)
+        {
+            foreach (var item in this.DownItems)
+            {
+                if (count == MaximumNumberOfThingsToDescribe)
+                {
+                    break;
+                }
+
+                tempBytes.AddRange(BitConverter.GetBytes(item.Type.ClientId));
+
+                if (item.IsCumulative)
+                {
+                    tempBytes.Add(item.Amount);
+                }
+                else if (item.IsLiquidPool || item.IsLiquidContainer)
+                {
+                    tempBytes.Add(item.LiquidType);
+                }
+
+                count++;
+            }
+        }
+
+        /// <summary>
+        /// Adds an item to the 'top' stack.
+        /// </summary>
+        /// <param name="i">The item to add.</param>
+        private void AddTopItem1(IItem i)
+        {
+            lock (this.topItems1OnTile)
+            {
+                this.topItems1OnTile.Push(i);
+                this.contentLastEditionTime = DateTimeOffset.Now;
+            }
+        }
+
+        /// <summary>
+        /// Adds an item to the 'top 2' stack.
+        /// </summary>
+        /// <param name="i">The item to add.</param>
+        private void AddTopItem2(IItem i)
+        {
+            lock (this.topItems2OnTile)
+            {
+                this.topItems2OnTile.Push(i);
+                this.contentLastEditionTime = DateTimeOffset.Now;
+            }
+        }
+
+        /// <summary>
+        /// Adds an item to the 'down' stack.
+        /// </summary>
+        /// <param name="i">The item to add.</param>
+        private void AddDownItem(IItem i)
+        {
+            lock (this.downItemsOnTile)
+            {
+                this.downItemsOnTile.Push(i);
+                this.contentLastEditionTime = DateTimeOffset.Now;
+            }
+        }
+
+        /// <summary>
+        /// Removes a creature from the tile.
+        /// </summary>
+        /// <param name="c">The creature to complete.</param>
+        private void RemoveCreature(ICreature c)
+        {
+            var tempStack = new Stack<Guid>();
+
+            ICreature removed = null;
+
+            lock (this.creatureIdsOnTile)
+            {
+                while (removed == null && this.creatureIdsOnTile.Count > 0)
+                {
+                    var temp = this.creatureIdsOnTile.Pop();
+
+                    if (c.Id == temp)
+                    {
+                        removed = c;
+                    }
+                    else
+                    {
+                        tempStack.Push(temp);
+                    }
+                }
+
+                while (tempStack.Count > 0)
+                {
+                    this.creatureIdsOnTile.Push(tempStack.Pop());
+                }
+            }
+
+            // Console.WriteLine($"Removed creature {c.Name} at {this.Location}");
         }
 
         // public FloorChangeDirection FloorChange

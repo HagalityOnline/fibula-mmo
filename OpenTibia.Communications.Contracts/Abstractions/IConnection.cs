@@ -8,8 +8,8 @@
 
 namespace OpenTibia.Communications.Contracts.Abstractions
 {
-    using OpenTibia.Communications.Contracts.Delegates;
     using System;
+    using OpenTibia.Communications.Contracts.Delegates;
 
     /// <summary>
     /// Interface for connections.

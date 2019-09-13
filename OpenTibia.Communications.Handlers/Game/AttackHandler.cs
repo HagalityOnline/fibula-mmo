@@ -39,6 +39,7 @@ namespace OpenTibia.Communications.Handlers.Game
         public override void HandleRequest(INetworkMessage message, IConnection connection)
         {
             var attackInfo = message.ReadAttackInfo();
+
             var player = this.Game.GetCreatureWithId(connection.PlayerId) as ICombatant;
 
             player?.SetAttackTarget(attackInfo.TargetCreatureId);

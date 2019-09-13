@@ -18,7 +18,7 @@ namespace OpenTibia.Server.Mapping
     using OpenTibia.Server.Contracts.Abstractions;
     using OpenTibia.Server.Contracts.Structs;
 
-    public class Map : IMap
+    public class Map : IMap, ITileAccessor
     {
         private const int LowestFloor = 0;
         private const int HighestFloor = 15;
@@ -45,18 +45,66 @@ namespace OpenTibia.Server.Mapping
         /// Initializes a new instance of the <see cref="Map"/> class.
         /// </summary>
         /// <param name="mapLoader"></param>
-        public Map(IMapLoader mapLoader)
+        /// <param name="creatureFinder"></param>
+        public Map(IMapLoader mapLoader, ICreatureFinder creatureFinder)
         {
             mapLoader.ThrowIfNull(nameof(mapLoader));
+            creatureFinder.ThrowIfNull(nameof(creatureFinder));
 
             this.tiles = new Memory<ITile>[NumberOfFloors];
 
             this.Loader = mapLoader;
+            this.CreatureFinder = creatureFinder;
             this.Tiles = new ConcurrentDictionary<Location, ITile>();
         }
 
+        /// <summary>
+        /// Gets the reference to the creature finder.
+        /// </summary>
+        public ICreatureFinder CreatureFinder { get; }
+
+        /// <summary>
+        /// Gets the reference to the selected map loader.
+        /// </summary>
         private IMapLoader Loader { get; }
 
+        /// <summary>
+        /// Gets the tile at a given <see cref="Location"/> in this map.
+        /// </summary>
+        /// <param name="location">The location to get the tile for.</param>
+        /// <returns>A tile instance, if a tile exists at the location, null otherwise.</returns>
+        public ITile this[Location location]
+        {
+            get
+            {
+                // if (location < Mininum2DLocation || location > Maximum2DLocation)
+                // {
+                //    return null;
+                // }
+
+                // var tilesOffset = Location.GetOffsetBetween(location, Mininum2DLocation);
+
+                // if (tilesOffset[0] >= Tiles.GetLength(0) ||
+                //    tilesOffset[1] >= Tiles.GetLength(1) ||
+                //    tilesOffset[2] >= Tiles.GetLength(2))
+                // {
+                //    return null;
+                // }
+                if (!this.Loader.HasLoaded(location.X, location.Y, (byte)location.Z))
+                {
+                    this.Load(location);
+                }
+
+                try
+                {
+                    return this.Tiles[location];
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+        }
 
         public void Load(Location atLocation)
         {
@@ -202,68 +250,33 @@ namespace OpenTibia.Server.Mapping
             // Initialized = true;
         }
 
-        public ITile this[Location location]
-        {
-            get
-            {
-                // if (location < Mininum2DLocation || location > Maximum2DLocation)
-                // {
-                //    return null;
-                // }
+        //internal IEnumerable<Guid> GetCreatureIdsAt(Location location)
+        //{
+        //    var fromX = location.X - 8;
+        //    var fromY = location.Y - 6;
 
-                // var tilesOffset = Location.GetOffsetBetween(location, Mininum2DLocation);
+        //    var toX = location.X + 8;
+        //    var toY = location.Y + 6;
 
-                // if (tilesOffset[0] >= Tiles.GetLength(0) ||
-                //    tilesOffset[1] >= Tiles.GetLength(1) ||
-                //    tilesOffset[2] >= Tiles.GetLength(2))
-                // {
-                //    return null;
-                // }
-                if (!this.Loader.HasLoaded(location.X, location.Y, (byte)location.Z))
-                {
-                    this.Load(location);
-                }
+        //    var creatureList = new List<Guid>();
 
-                try
-                {
-                    return this.Tiles[location];
-                }
-                catch
-                {
-                    return null;
-                }
-            }
-        }
+        //    for (var x = fromX; x <= toX; x++)
+        //    {
+        //        for (var y = fromY; y <= toY; y++)
+        //        {
+        //            var creaturesInTile = this[(ushort)x, (ushort)y, location.Z]?.CreatureIds;
 
-        public ITile this[ushort x, ushort y, sbyte z] => this[new Location { X = x, Y = y, Z = z }];
+        //            if (creaturesInTile != null)
+        //            {
+        //                creatureList.AddRange(creaturesInTile);
+        //            }
+        //        }
+        //    }
 
-        internal IEnumerable<uint> GetCreatureIdsAt(Location location)
-        {
-            var fromX = location.X - 8;
-            var fromY = location.Y - 6;
+        //    return creatureList;
+        //}
 
-            var toX = location.X + 8;
-            var toY = location.Y + 6;
-
-            var creatureList = new List<uint>();
-
-            for (var x = fromX; x <= toX; x++)
-            {
-                for (var y = fromY; y <= toY; y++)
-                {
-                    var creaturesInTile = this[(ushort)x, (ushort)y, location.Z]?.CreatureIds;
-
-                    if (creaturesInTile != null)
-                    {
-                        creatureList.AddRange(creaturesInTile);
-                    }
-                }
-            }
-
-            return creatureList;
-        }
-
-        public IList<byte> GetDescription(IPlayer player, ushort fromX, ushort fromY, sbyte currentZ, bool isUnderground, byte windowSizeX = MapConstants.DefaultMapWindowSizeX, byte windowSizeY = MapConstants.DefaultMapWindowSizeY)
+        public IEnumerable<byte> GetDescription(IPlayer player, ushort fromX, ushort fromY, sbyte currentZ, bool isUnderground, byte windowSizeX = MapConstants.DefaultMapWindowSizeX, byte windowSizeY = MapConstants.DefaultMapWindowSizeY)
         {
             var tempBytes = new List<byte>();
 
@@ -297,7 +310,7 @@ namespace OpenTibia.Server.Mapping
             return tempBytes;
         }
 
-        public IList<byte> GetFloorDescription(IPlayer player, ushort fromX, ushort fromY, sbyte currentZ, byte windowSizeX, byte windowSizeY, int verticalOffset, ref int skip)
+        public IEnumerable<byte> GetFloorDescription(IPlayer player, ushort fromX, ushort fromY, sbyte currentZ, byte windowSizeX, byte windowSizeY, int verticalOffset, ref int skip)
         {
             var tempBytes = new List<byte>();
 
@@ -305,7 +318,7 @@ namespace OpenTibia.Server.Mapping
             {
                 for (var ny = 0; ny < windowSizeY; ny++)
                 {
-                    var tile = this[(ushort)(fromX + nx + verticalOffset), (ushort)(fromY + ny + verticalOffset), currentZ];
+                    var tile = this[new Location { X = (ushort)(fromX + nx + verticalOffset), Y = (ushort)(fromY + ny + verticalOffset), Z = currentZ }];
 
                     if (tile != null)
                     {
@@ -331,155 +344,24 @@ namespace OpenTibia.Server.Mapping
             return tempBytes;
         }
 
-        public IList<byte> GetTileDescription(IPlayer player, ITile tile)
+        public IEnumerable<byte> GetTileDescription(IPlayer asPlayer, ITile tile)
         {
             if (tile == null)
             {
                 return new byte[0];
             }
 
-            var tempBytes = new List<byte>();
+            return tile.GetDescription(asPlayer);
+        }
 
-            var count = 0;
-            const int numberOfObjectsLimit = 9;
-
-            if (tile.Ground != null)
-            {
-                tempBytes.AddRange(BitConverter.GetBytes(tile.Ground.Type.ClientId));
-                count++;
-            }
-
-            foreach (var item in tile.TopItems1)
-            {
-                if (count == numberOfObjectsLimit)
-                {
-                    break;
-                }
-
-                tempBytes.AddRange(BitConverter.GetBytes(item.Type.ClientId));
-
-                if (item.IsCumulative)
-                {
-                    tempBytes.Add(item.Amount);
-                }
-                else if (item.IsLiquidPool || item.IsLiquidContainer)
-                {
-                    tempBytes.Add(item.LiquidType);
-                }
-
-                count++;
-            }
-
-            foreach (var item in tile.TopItems2)
-            {
-                if (count == numberOfObjectsLimit)
-                {
-                    break;
-                }
-
-                tempBytes.AddRange(BitConverter.GetBytes(item.Type.ClientId));
-
-                if (item.IsCumulative)
-                {
-                    tempBytes.Add(item.Amount);
-                }
-                else if (item.IsLiquidPool || item.IsLiquidContainer)
-                {
-                    tempBytes.Add(item.LiquidType);
-                }
-
-                count++;
-            }
-
-            foreach (var creatureId in tile.CreatureIds)
-            {
-                var creature = Game.Instance.GetCreatureWithId(creatureId);
-
-                if (creature == null)
-                {
-                    continue;
-                }
-
-                if (count == numberOfObjectsLimit)
-                {
-                    break;
-                }
-
-                if (player.KnowsCreatureWithId(creatureId))
-                {
-                    tempBytes.AddRange(BitConverter.GetBytes((ushort)OutgoingGamePacketType.AddKnownCreature));
-                    tempBytes.AddRange(BitConverter.GetBytes(creatureId));
-                }
-                else
-                {
-                    tempBytes.AddRange(BitConverter.GetBytes((ushort)OutgoingGamePacketType.AddUnknownCreature));
-                    tempBytes.AddRange(BitConverter.GetBytes(player.ChooseToRemoveFromKnownSet()));
-                    tempBytes.AddRange(BitConverter.GetBytes(creatureId));
-
-                    player.AddKnownCreature(creatureId);
-
-                    var creatureNameBytes = Encoding.Default.GetBytes(creature.Name);
-                    tempBytes.AddRange(BitConverter.GetBytes((ushort)creatureNameBytes.Length));
-                    tempBytes.AddRange(creatureNameBytes);
-                }
-
-                tempBytes.Add((byte)Math.Min(100, creature.Hitpoints * 100 / creature.MaxHitpoints));
-                tempBytes.Add((byte)creature.ClientSafeDirection);
-
-                if (player.CanSee(creature))
-                {
-                    // Add creature outfit
-                    tempBytes.AddRange(BitConverter.GetBytes(creature.Outfit.Id));
-
-                    if (creature.Outfit.Id > 0)
-                    {
-                        tempBytes.Add(creature.Outfit.Head);
-                        tempBytes.Add(creature.Outfit.Body);
-                        tempBytes.Add(creature.Outfit.Legs);
-                        tempBytes.Add(creature.Outfit.Feet);
-                    }
-                    else
-                    {
-                        tempBytes.AddRange(BitConverter.GetBytes(creature.Outfit.LikeType));
-                    }
-                }
-                else
-                {
-                    tempBytes.AddRange(BitConverter.GetBytes((ushort)0));
-                    tempBytes.AddRange(BitConverter.GetBytes((ushort)0));
-                }
-
-                tempBytes.Add(creature.LightBrightness);
-                tempBytes.Add(creature.LightColor);
-
-                tempBytes.AddRange(BitConverter.GetBytes(creature.Speed));
-
-                tempBytes.Add(creature.Skull);
-                tempBytes.Add(creature.Shield);
-            }
-
-            foreach (var item in tile.DownItems)
-            {
-                if (count == numberOfObjectsLimit)
-                {
-                    break;
-                }
-
-                tempBytes.AddRange(BitConverter.GetBytes(item.Type.ClientId));
-
-                if (item.IsCumulative)
-                {
-                    tempBytes.Add(item.Amount);
-                }
-                else if (item.IsLiquidPool || item.IsLiquidContainer)
-                {
-                    tempBytes.Add(item.LiquidType);
-                }
-
-                count++;
-            }
-
-            return tempBytes;
+        /// <summary>
+        /// Gets a tile at a given <see cref="Location"/>, if any.
+        /// </summary>
+        /// <param name="location">The location to get the file from.</param>
+        /// <returns>A tile instance, if there is one at the location.</returns>
+        public ITile GetTileAt(Location location)
+        {
+            return this[location];
         }
     }
 }

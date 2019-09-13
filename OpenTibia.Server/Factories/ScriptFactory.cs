@@ -12,6 +12,7 @@ namespace OpenTibia.Server.Factories
     using System.Collections.Generic;
     using System.Linq;
     using OpenTibia.Common.Helpers;
+    using OpenTibia.Communications.Packets.Outgoing;
     using OpenTibia.Data.Contracts.Enumerations;
     using OpenTibia.Server.Contracts.Abstractions;
     using OpenTibia.Server.Contracts.Enumerations;
@@ -32,9 +33,33 @@ namespace OpenTibia.Server.Factories
 
         private static TimeSpan defaultDelayForFunctions = TimeSpan.FromMilliseconds(1);
 
-        public bool InvokeCondition(IGame gameInstance, IThing obj1, IThing obj2, IPlayer user, string methodName, params object[] parameters)
+        public ScriptFactory(
+            IGame gameInstance,
+            ICreatureFinder creatureFinder,
+            INotificationFactory notificationFactory,
+            ITileAccessor tileAccessor)
         {
             gameInstance.ThrowIfNull(nameof(gameInstance));
+            creatureFinder.ThrowIfNull(nameof(creatureFinder));
+            notificationFactory.ThrowIfNull(nameof(notificationFactory));
+            tileAccessor.ThrowIfNull(nameof(tileAccessor));
+
+            this.Game = gameInstance;
+            this.CreatureFinder = creatureFinder;
+            this.NotificationFactory = notificationFactory;
+            this.TileAccessor = tileAccessor;
+        }
+
+        public IGame Game { get; }
+
+        public ICreatureFinder CreatureFinder { get; }
+
+        public INotificationFactory NotificationFactory { get; }
+
+        public ITileAccessor TileAccessor { get; }
+
+        public bool InvokeCondition(IThing obj1, IThing obj2, IPlayer user, string methodName, params object[] parameters)
+        {
             methodName.ThrowIfNullOrWhiteSpace(nameof(methodName));
 
             var negateCondition = methodName.StartsWith("!");
@@ -52,10 +77,7 @@ namespace OpenTibia.Server.Factories
 
                 var methodParameters = methodInfo.GetParameters();
 
-                var parametersForInvocation = new List<object>()
-                {
-                    gameInstance,
-                };
+                var parametersForInvocation = new List<object>();
 
                 for (var i = 0; i < methodParameters.Length; i++)
                 {
@@ -91,9 +113,8 @@ namespace OpenTibia.Server.Factories
             return false;
         }
 
-        public void InvokeAction(IGame gameInstance, ref IThing obj1, ref IThing obj2, ref IPlayer user, string methodName, params object[] parameters)
+        public void InvokeAction(ref IThing obj1, ref IThing obj2, ref IPlayer user, string methodName, params object[] parameters)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
             methodName.ThrowIfNullOrWhiteSpace(nameof(methodName));
 
             var methodInfo = this.GetType().GetMethod(methodName);
@@ -107,10 +128,7 @@ namespace OpenTibia.Server.Factories
 
                 var methodParameters = methodInfo.GetParameters();
 
-                var parametersForInvocation = new List<object>()
-                {
-                    gameInstance,
-                };
+                var parametersForInvocation = new List<object>();
 
                 for (var i = 0; i < methodParameters.Length; i++)
                 {
@@ -170,6 +188,7 @@ namespace OpenTibia.Server.Factories
             }
 
             var count = thingAt.Tile.Ground == null ? 0 : 1;
+
             count += thingAt.Tile.DownItems.Count();
 
             switch (comparer.Trim())
@@ -210,11 +229,9 @@ namespace OpenTibia.Server.Factories
             return thing is IPlayer;
         }
 
-        public bool IsObjectThere(IGame gameInstance, Location location, ushort typeId)
+        public bool IsObjectThere(Location location, ushort typeId)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
-            var targetTile = gameInstance.GetTileAt(location);
+            var targetTile = this.TileAccessor.GetTileAt(location);
 
             return targetTile?.BruteFindItemWithId(typeId) != null;
         }
@@ -224,9 +241,9 @@ namespace OpenTibia.Server.Factories
             return true; // TODO: implement.
         }
 
-        public bool MayLogout(IPlayer user)
+        public bool MayLogout(IPlayer player)
         {
-            return user.CanLogout;
+            return player.IsLogoutAllowed;
         }
 
         public bool HasFlag(IThing itemThing, string flagStr)
@@ -246,7 +263,8 @@ namespace OpenTibia.Server.Factories
 
         public bool HasProfession(IThing thing, byte profesionId)
         {
-            return thing != null && thing is IPlayer && false; // TODO: implement professions.
+            // TODO: implement professions.
+            return thing != null && thing is IPlayer && false;
         }
 
         public bool HasInstanceAttribute(IThing thing, string attributeStr, string comparer, ushort value)
@@ -291,19 +309,20 @@ namespace OpenTibia.Server.Factories
 
         public bool IsHouseOwner(IThing thing, IPlayer user)
         {
+            // TODO: implement house ownership.
             return this.IsHouse(thing); // && thing.Tile.House.Owner == user.Name;
         }
 
         public bool Random(byte value)
         {
+            // TODO: is this really bound to 100? or do we need more precision.
             return new Random().Next(100) <= value;
         }
 
-        public void Create(IGame gameInstance, IThing atThing, ushort itemId, byte unknown)
+        public void Create(IThing atThing, ushort itemId, byte unknown)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
             IThing item = ItemFactory.Create(itemId);
+
             var targetTile = atThing.Tile;
 
             if (item == null || targetTile == null)
@@ -311,15 +330,11 @@ namespace OpenTibia.Server.Factories
                 return;
             }
 
-            targetTile.AddThing(ref item);
-
-            gameInstance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, targetTile.Location, gameInstance.GetMapTileDescription(conn.PlayerId, targetTile.Location)), targetTile.Location);
+            this.Game.AssetManagement.AddThingToTile(ref item, targetTile);
         }
 
-        public void CreateOnMap(IGame gameInstance, Location location, ushort itemId, byte unknown)
+        public void CreateOnMap(Location location, ushort itemId, byte unknown)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
             IThing item = ItemFactory.Create(itemId);
 
             if (item == null)
@@ -327,7 +342,7 @@ namespace OpenTibia.Server.Factories
                 return;
             }
 
-            var targetTile = gameInstance.GetTileAt(location);
+            var targetTile = this.TileAccessor.GetTileAt(location);
 
             if (targetTile == null)
             {
@@ -336,14 +351,12 @@ namespace OpenTibia.Server.Factories
 
             targetTile.AddThing(ref item);
 
-            gameInstance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, location, gameInstance.GetMapTileDescription(conn.PlayerId, location)), location);
+            this.Game.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, location, gameInstance.GetMapTileDescription(conn.PlayerId, location)), location);
         }
 
-        public void ChangeOnMap(IGame gameInstance, Location location, ushort fromItemId, ushort toItemId, byte unknown)
+        public void ChangeOnMap(Location location, ushort fromItemId, ushort toItemId, byte unknown)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
-            var targetTile = gameInstance.GetTileAt(location);
+            var targetTile = this.TileAccessor.GetTileAt(location);
             IThing newThing = ItemFactory.Create(toItemId);
 
             if (targetTile == null || newThing == null)
@@ -354,13 +367,11 @@ namespace OpenTibia.Server.Factories
             targetTile.BruteRemoveItemWithId(fromItemId);
             targetTile.AddThing(ref newThing);
 
-            gameInstance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, location, gameInstance.GetMapTileDescription(conn.PlayerId, location)), targetTile.Location);
+            this.Game.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, location, gameInstance.GetMapTileDescription(conn.PlayerId, location)), targetTile.Location);
         }
 
-        public void Effect(IGame gameInstance, IThing thing, byte effectByte)
+        public void Effect(IThing thing, byte effectByte)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
             if (thing == null)
             {
                 return;
@@ -372,34 +383,33 @@ namespace OpenTibia.Server.Factories
                 return;
             }
 
-            gameInstance.NotifySpectatingPlayers(
-                conn => new GenericNotification(
-                    conn,
-                    new MagicEffectPacket { Location = thing.Location, Effect = (AnimatedEffect)effectByte }),
-                thing.Location);
+            // TODO: fix this
+            //gameInstance.NotifySpectatingPlayers(
+            //    this.NotificationFactory.Create(
+            //        NotificationType.Generic,
+            //        new GenericNotificationArguments(
+            //            new[] { new MagicEffectPacket(thing.Location, (AnimatedEffect)effectByte) },
+            //            playerIds: ),
+            //    thing.Location));
         }
 
-        public void EffectOnMap(IGame gameInstance, Location location, byte effectByte)
+        public void EffectOnMap(Location location, byte effectByte)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
             if (effectByte == 0 || effectByte > (byte)AnimatedEffect.SoundWhite)
             {
                 Console.WriteLine($"Invalid effect {effectByte} called on map, ignored.");
                 return;
             }
 
-            gameInstance.NotifySpectatingPlayers(
+            this.Game.NotifySpectatingPlayers(
                 conn => new GenericNotification(
                     conn,
                     new MagicEffectPacket { Location = location, Effect = (AnimatedEffect)effectByte }),
                 location);
         }
 
-        public void Delete(IGame gameInstance, IThing thing)
+        public void Delete(IThing thing)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
             var targetTile = thing?.Tile;
 
             if (thing == null || targetTile == null)
@@ -410,14 +420,12 @@ namespace OpenTibia.Server.Factories
             var toRemove = thing;
             targetTile.RemoveThing(ref toRemove, thing.Count);
 
-            gameInstance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, targetTile.Location, gameInstance.GetMapTileDescription(conn.PlayerId, targetTile.Location)), targetTile.Location);
+            this.Game.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, targetTile.Location, gameInstance.GetMapTileDescription(conn.PlayerId, targetTile.Location)), targetTile.Location);
         }
 
-        public void DeleteOnMap(IGame gameInstance, Location location, ushort itemId)
+        public void DeleteOnMap(Location location, ushort itemId)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
-            var targetTile = gameInstance.GetTileAt(location);
+            var targetTile = this.TileAccessor.GetTileAt(location);
 
             if (targetTile == null)
             {
@@ -426,19 +434,17 @@ namespace OpenTibia.Server.Factories
 
             targetTile.BruteRemoveItemWithId(itemId);
 
-            gameInstance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, location, gameInstance.GetMapTileDescription(conn.PlayerId, location)), targetTile.Location);
+            this.Game.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, location, gameInstance.GetMapTileDescription(conn.PlayerId, location)), targetTile.Location);
         }
 
-        public void MonsterOnMap(IGame gameInstance, Location location, ushort monsterId)
+        public void MonsterOnMap(Location location, ushort monsterId)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
             var monster = MonsterFactory.Create(monsterId);
 
             if (monster != null)
             {
                 IThing monsterAsThing = monster;
-                var tile = gameInstance.GetTileAt(location);
+                var tile = this.TileAccessor.GetTileAt(location);
 
                 if (tile == null)
                 {
@@ -449,19 +455,23 @@ namespace OpenTibia.Server.Factories
                 // place the monster.
                 tile.AddThing(ref monsterAsThing);
 
-                if (!gameInstance.Creatures.TryAdd(monster.Id, monster))
+                if (!this.Game.Creatures.TryAdd(monster.Id, monster))
                 {
                     Console.WriteLine($"WARNING: Failed to add {monster.Article} {monster.Name} to the global dictionary.");
                 }
 
-                gameInstance.NotifySpectatingPlayers(conn => new CreatureAddedNotification(conn, monster, AnimatedEffect.BubbleBlue), monster.Location);
+                var creatureAddedNotification = this.NotificationFactory.Create(
+                    NotificationType.CreatureAdded,
+                    new CreatureAddedNotificationArguments(monster, AnimatedEffect.BubbleBlue));
+
+                this.Game.ScheduleEvent(creatureAddedNotification);
+
+                this.Game.NotifySpectatingPlayers(conn => new CreatureAddedNotification(conn, monster, AnimatedEffect.BubbleBlue), monster.Location);
             }
         }
 
-        public void Change(IGame gameInstance, ref IThing thing, ushort toItemId, byte unknown)
+        public void Change(ref IThing thing, ushort toItemId, byte unknown)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
             if (thing == null)
             {
                 return;
@@ -481,19 +491,17 @@ namespace OpenTibia.Server.Factories
 
             thing = newThing;
 
-            gameInstance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, targetTile.Location, gameInstance.GetMapTileDescription(conn.PlayerId, targetTile.Location)), targetTile.Location);
+            this.Game.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, targetTile.Location, gameInstance.GetMapTileDescription(conn.PlayerId, targetTile.Location)), targetTile.Location);
         }
 
-        public void ChangeRel(IGame gameInstance, IThing fromThing, Location locationOffset, ushort fromItemId, ushort toItemId, byte unknown)
+        public void ChangeRel(IThing fromThing, Location locationOffset, ushort fromItemId, ushort toItemId, byte unknown)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
             if (fromThing == null)
             {
                 return;
             }
 
-            var targetTile = gameInstance.GetTileAt(fromThing.Location + locationOffset);
+            var targetTile = this.TileAccessor.GetTileAt(fromThing.Location + locationOffset);
             IThing newThing = ItemFactory.Create(toItemId);
 
             if (targetTile == null || newThing == null)
@@ -504,10 +512,10 @@ namespace OpenTibia.Server.Factories
             targetTile.BruteRemoveItemWithId(fromItemId);
             targetTile.AddThing(ref newThing);
 
-            gameInstance.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, targetTile.Location, gameInstance.GetMapTileDescription(conn.PlayerId, targetTile.Location)), targetTile.Location);
+            this.Game.NotifySpectatingPlayers(conn => new TileUpdatedNotification(conn, targetTile.Location, gameInstance.GetMapTileDescription(conn.PlayerId, targetTile.Location)), targetTile.Location);
         }
 
-        public void Damage(IGame gameInstance, IThing damagingThing, IThing damagedThing, byte damageSourceType, ushort damageValue)
+        public void Damage(IThing damagingThing, IThing damagedThing, byte damageSourceType, ushort damageValue)
         {
             // TODO: implement correctly when combat is...
 
@@ -523,13 +531,13 @@ namespace OpenTibia.Server.Factories
                 case 2: // magic? or mana?
                     break;
                 case 4: // fire instant
-                    this.Effect(gameInstance, damagedThing, (byte)AnimatedEffect.Flame);
+                    this.Effect(damagedThing, (byte)AnimatedEffect.Flame);
                     break;
                 case 8: // energy instant
-                    this.Effect(gameInstance, damagedThing, (byte)AnimatedEffect.DamageEnergy);
+                    this.Effect(damagedThing, (byte)AnimatedEffect.DamageEnergy);
                     break;
                 case 16: // poison instant?
-                    this.Effect(gameInstance, damagedThing, (byte)AnimatedEffect.RingsGreen);
+                    this.Effect(damagedThing, (byte)AnimatedEffect.RingsGreen);
                     break;
                 case 32: // poison over time (poisoned condition)
                     break;
@@ -540,17 +548,13 @@ namespace OpenTibia.Server.Factories
             }
         }
 
-        public void Logout(IGame gameInstance, IPlayer user)
+        public void Logout(IPlayer user)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
-            gameInstance.AttemptLogout(user); // TODO: force?
+            this.Game.AttemptLogout(user); // TODO: force?
         }
 
-        public void Move(IGame gameInstance, IThing thingToMove, Location targetLocation)
+        public void Move(IThing thingToMove, Location targetLocation)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
             if (thingToMove == null)
             {
                 return;
@@ -558,25 +562,21 @@ namespace OpenTibia.Server.Factories
 
             if (thingToMove is ICreature thingAsCreature)
             {
-                gameInstance.ScheduleEvent(new CreatureMovementOnMap(0, thingAsCreature, thingToMove.Location, targetLocation), defaultDelayForFunctions);
+                this.Game.ScheduleEvent(new CreatureMovementOnMap(0, thingAsCreature, thingToMove.Location, targetLocation), defaultDelayForFunctions);
             }
             else if (thingToMove is IItem thingAsItem)
             {
-                gameInstance.ScheduleEvent(new OnMapMovementEvent(0, thingAsItem, thingToMove.Location, thingToMove.Tile.GetStackPosition(thingToMove), targetLocation, thingAsItem.Count), defaultDelayForFunctions);
+                this.Game.ScheduleEvent(new OnMapMovementEvent(0, thingAsItem, thingToMove.Location, thingToMove.Tile.GetStackPosition(thingToMove), targetLocation, thingAsItem.Count), defaultDelayForFunctions);
             }
         }
 
-        public void MoveRel(IGame gameInstance, ICreature user, IThing objectUsed, Location locationOffset)
+        public void MoveRel(ICreature user, IThing objectUsed, Location locationOffset)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
-            gameInstance.ScheduleEvent(new OnMapMovementEvent(0, user, user.Location, user.Tile.GetStackPosition(user), objectUsed.Location + locationOffset, 1, true), defaultDelayForFunctions);
+            this.Game.ScheduleEvent(new OnMapMovementEvent(0, user, user.Location, user.Tile.GetStackPosition(user), objectUsed.Location + locationOffset, 1, true), defaultDelayForFunctions);
         }
 
-        public void MoveTop(IGame gameInstance, IThing fromThing, Location targetLocation)
+        public void MoveTop(IThing fromThing, Location targetLocation)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
             if (fromThing == null)
             {
                 return;
@@ -585,12 +585,17 @@ namespace OpenTibia.Server.Factories
             // Move all down items and creatures on tile.
             foreach (var item in fromThing.Tile.DownItems.ToList())
             {
-                gameInstance.ScheduleEvent(new OnMapMovementEvent(0, item, fromThing.Location, fromThing.Tile.GetStackPosition(item), targetLocation), defaultDelayForFunctions);
+                this.Game.ScheduleEvent(new OnMapMovementEvent(0, item, fromThing.Location, fromThing.Tile.GetStackPosition(item), targetLocation), defaultDelayForFunctions);
             }
 
             foreach (var creatureId in fromThing.Tile.CreatureIds.ToList())
             {
-                gameInstance.ScheduleEvent(new CreatureMovementOnMap(0, gameInstance.GetCreatureWithId(creatureId), fromThing.Location, targetLocation, true), defaultDelayForFunctions);
+                var creature = this.CreatureFinder.FindCreatureById(creatureId);
+
+                if (creature != null)
+                {
+                    this.Game.ScheduleEvent(new CreatureMovementOnMap(0, creature, fromThing.Location, targetLocation, true), defaultDelayForFunctions);
+                }
             }
         }
 
@@ -599,36 +604,37 @@ namespace OpenTibia.Server.Factories
         /// </summary>
         /// <param name="fromThing">The reference <see cref="Thing"/> to move from.</param>
         /// <param name="locationOffset">The <see cref="Location"/> offset to move to.</param>
-        public void MoveTopRel(IGame gameInstance, IThing fromThing, Location locationOffset)
+        public void MoveTopRel(IThing fromThing, Location locationOffset)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
             var targetLocation = fromThing.Location + locationOffset;
 
             // Move all down items and creatures on tile.
             foreach (var item in fromThing.Tile.DownItems.ToList())
             {
-                gameInstance.ScheduleEvent(new OnMapMovementEvent(0, item, fromThing.Location, fromThing.Tile.GetStackPosition(fromThing), targetLocation, item.Count), defaultDelayForFunctions);
+                this.Game.ScheduleEvent(new OnMapMovementEvent(0, item, fromThing.Location, fromThing.Tile.GetStackPosition(fromThing), targetLocation, item.Count), defaultDelayForFunctions);
             }
 
             foreach (var creatureId in fromThing.Tile.CreatureIds.ToList())
             {
-                gameInstance.ScheduleEvent(new CreatureMovementOnMap(0, gameInstance.GetCreatureWithId(creatureId), fromThing.Location, targetLocation, true), defaultDelayForFunctions);
+                var creature = this.CreatureFinder.FindCreatureById(creatureId);
+
+                if (creature != null)
+                {
+                    this.Game.ScheduleEvent(new CreatureMovementOnMap(0, creature, fromThing.Location, targetLocation, true), defaultDelayForFunctions);
+                }
             }
         }
 
-        public void MoveTopOnMap(IGame gameInstance, Location fromLocation, ushort itemId, Location toLocation)
+        public void MoveTopOnMap(Location fromLocation, ushort itemId, Location toLocation)
         {
-            gameInstance.ThrowIfNull(nameof(gameInstance));
-
-            var tile = gameInstance.GetTileAt(fromLocation);
+            var tile = this.TileAccessor.GetTileAt(fromLocation);
 
             if (tile == null)
             {
                 return;
             }
 
-            this.MoveTop(gameInstance, tile.BruteFindItemWithId(itemId), toLocation);
+            this.MoveTop(tile.BruteFindItemWithId(itemId), toLocation);
         }
 
         public void Text(IThing fromThing, string text, byte textType)

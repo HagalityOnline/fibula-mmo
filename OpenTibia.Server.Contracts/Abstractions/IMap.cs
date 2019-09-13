@@ -8,26 +8,25 @@
 
 namespace OpenTibia.Server.Contracts.Abstractions
 {
-    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using OpenTibia.Server.Contracts.Structs;
 
+    /// <summary>
+    /// Interface for a map.
+    /// </summary>
     public interface IMap
     {
+        /// <summary>
+        /// Gets the tile at a given <see cref="Location"/> in this map.
+        /// </summary>
+        /// <param name="location">The location to get the tile for.</param>
+        /// <returns>A tile instance, if a tile exists at the location, null otherwise.</returns>
         ITile this[Location location] { get; }
 
-        ITile this[ushort x, ushort y, sbyte z] { get; }
+        IEnumerable<byte> GetDescription(IPlayer asPlayer, ushort fromX, ushort fromY, sbyte currentZ, bool isUnderground, byte windowSizeX = 18, byte windowSizeY = 14);
 
-        ConcurrentDictionary<Location, ITile> Tiles { get; }
+        IEnumerable<byte> GetFloorDescription(IPlayer asPlayer, ushort fromX, ushort fromY, sbyte currentZ, byte windowSizeX, byte windowSizeY, int verticalOffset, ref int skip);
 
-        IList<byte> GetDescription(IPlayer player, ushort fromX, ushort fromY, sbyte currentZ, bool isUnderground, byte windowSizeX = 18, byte windowSizeY = 14);
-
-        IList<byte> GetFloorDescription(IPlayer player, ushort fromX, ushort fromY, sbyte currentZ, byte windowSizeX, byte windowSizeY, int verticalOffset, ref int skip);
-
-        IList<byte> GetTileDescription(IPlayer player, ITile tile);
-
-        void Load(int fromX = 0, int toX = 0, int fromY = 0, int toY = 0, byte fromZ = 0, byte toZ = 0);
-
-        void Load(Location atLocation);
+        IEnumerable<byte> GetTileDescription(IPlayer asPlayer, ITile tile);
     }
 }

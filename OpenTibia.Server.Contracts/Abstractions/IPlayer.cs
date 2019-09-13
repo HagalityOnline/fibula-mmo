@@ -6,6 +6,7 @@
 
 namespace OpenTibia.Server.Contracts.Abstractions
 {
+    using System;
     using OpenTibia.Server.Contracts.Enumerations;
     using OpenTibia.Server.Contracts.Structs;
 
@@ -21,7 +22,7 @@ namespace OpenTibia.Server.Contracts.Abstractions
 
         byte SoulPoints { get; } // TODO: nobody likes soulpoints... figure out what to do with them :)
 
-        bool CanLogout { get; }
+        bool IsLogoutAllowed { get; }
 
         Location LocationInFront { get; }
 
@@ -31,7 +32,7 @@ namespace OpenTibia.Server.Contracts.Abstractions
 
         uint ChooseToRemoveFromKnownSet();
 
-        bool KnowsCreatureWithId(uint creatureId);
+        bool KnowsCreatureWithId(Guid creatureId);
 
         byte GetSkillInfo(SkillType fist);
 

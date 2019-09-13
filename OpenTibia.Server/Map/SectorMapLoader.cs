@@ -7,11 +7,16 @@
 namespace OpenTibia.Server.Map
 {
     using System;
+    using System.Collections.Generic;
     using System.IO;
+    using System.Linq;
     using System.Threading;
     using System.Threading.Tasks;
     using OpenTibia.Common.Helpers;
+    using OpenTibia.Data.Contracts.Enumerations;
     using OpenTibia.Server.Contracts.Abstractions;
+    using OpenTibia.Server.Contracts.Structs;
+    using OpenTibia.Server.Parsing;
 
     public class SectorMapLoader : IMapLoader
     {
@@ -19,6 +24,13 @@ namespace OpenTibia.Server.Map
         private static readonly Lazy<ConnectionMultiplexer> CacheConnectionInstance = new Lazy<ConnectionMultiplexer>(() => ConnectionMultiplexer.Connect("<redis connection string>"));
 
         public static ConnectionMultiplexer CacheConnection => CacheConnectionInstance.Value;
+
+        public const char CommentSymbol = '#';
+        public const char SectorSeparator = ':';
+        public const char PositionSeparator = '-';
+
+        public const string AttributeSeparator = ",";
+        public const string AttributeDefinition = "=";
 
         public const int SectorXMin = 996;
         public const int SectorXMax = 1043;
@@ -40,22 +52,28 @@ namespace OpenTibia.Server.Map
         /// <summary>
         /// Initializes a new instance of the <see cref="SectorMapLoader"/> class.
         /// </summary>
+        /// <param name="creatureFinder"></param>
         /// <param name="mapFilesPath"></param>
-        public SectorMapLoader(string mapFilesPath)
+        public SectorMapLoader(ICreatureFinder creatureFinder, string mapFilesPath)
         {
             mapFilesPath.ThrowIfNullOrWhiteSpace(nameof(mapFilesPath));
 
             this.mapDirInfo = new DirectoryInfo(mapFilesPath);
+
+            this.CreatureFinder = creatureFinder;
 
             this.totalTileCount = 1;
             this.totalLoadedCount = default;
             this.sectorsLoaded = new bool[SectorXMax - SectorXMin, SectorYMax - SectorYMin, SectorZMax - SectorZMin];
         }
 
+        public ICreatureFinder CreatureFinder { get; }
+
         // public ITile[,,] LoadFullMap()
         // {
         //    return Load(SectorXMin, SectorXMax, SectorYMin, SectorYMax, SectorZMin, SectorZMax);
         // }
+
         public ITile[,,] Load(int fromSectorX, int toSectorX, int fromSectorY, int toSectorY, byte fromSectorZ, byte toSectorZ)
         {
             if (toSectorX < fromSectorX || toSectorY < fromSectorY || toSectorZ < fromSectorZ)
@@ -98,7 +116,7 @@ namespace OpenTibia.Server.Map
 
                         if (!string.IsNullOrEmpty(fileContents))
                         {
-                            var loadedTiles = SectorFileReader.ReadSector(sectorFileName, fileContents, (ushort)(sectorX * 32), (ushort)(sectorY * 32), (sbyte)sectorZ);
+                            var loadedTiles = this.ReadSector(sectorFileName, fileContents, (ushort)(sectorX * 32), (ushort)(sectorY * 32), (sbyte)sectorZ);
 
                             Parallel.ForEach(loadedTiles, tile =>
                             {
@@ -125,6 +143,74 @@ namespace OpenTibia.Server.Map
             }
 
             return this.sectorsLoaded[x - SectorXMin, y - SectorYMin, z - SectorZMin];
+        }
+
+        public IList<Tile> ReadSector(string fileName, string sectorFileContents, ushort xOffset, ushort yOffset, sbyte z)
+        {
+            var loadedTilesList = new List<Tile>();
+
+            var lines = sectorFileContents.Split("\r\n".ToCharArray(), StringSplitOptions.RemoveEmptyEntries);
+
+            foreach (var readLine in lines)
+            {
+                var inLine = readLine?.Split(new[] { CommentSymbol }, 2).FirstOrDefault();
+
+                // ignore comments and empty lines.
+                if (string.IsNullOrWhiteSpace(inLine))
+                {
+                    continue;
+                }
+
+                var data = inLine.Split(new[] { SectorSeparator }, 2);
+
+                if (data.Length != 2)
+                {
+                    throw new Exception($"Malformed line [{inLine}] in sector file: [{fileName}]");
+                }
+
+                var tileInfo = data[0].Split(new[] { PositionSeparator }, 2);
+                var tileData = data[1];
+
+                var newTile = new Tile(
+                    this.CreatureFinder,
+                    new Location
+                    {
+                        X = (ushort)(xOffset + Convert.ToUInt16(tileInfo[0])),
+                        Y = (ushort)(yOffset + Convert.ToUInt16(tileInfo[1])),
+                        Z = z,
+                    });
+
+                // load and add tile flags and contents.
+                foreach (var element in CipParser.Parse(tileData))
+                {
+                    foreach (var attribute in element.Attributes)
+                    {
+                        if (attribute.Name.Equals("Content"))
+                        {
+                            newTile.AddParsedContent(attribute.Value);
+                        }
+                        else
+                        {
+                            // it's a flag
+                            if (Enum.TryParse(attribute.Name, out TileFlag flagMatch))
+                            {
+                                newTile.SetFlag(flagMatch);
+                            }
+                            else
+                            {
+                                // TODO: proper logging.
+                                Console.WriteLine($"Unknown flag [{attribute.Name}] found on tile at location {newTile.Location}.");
+                            }
+                        }
+                    }
+                }
+
+                loadedTilesList.Add(newTile);
+            }
+
+            // TODO: proper logging.
+            // Console.WriteLine($"Sector file {sectorFileContents.Name}: {loadedTilesList.Count} tiles loaded.");
+            return loadedTilesList;
         }
     }
 }

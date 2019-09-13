@@ -17,18 +17,32 @@ namespace OpenTibia.Server.Notifications
         /// <summary>
         /// Initializes a new instance of the <see cref="GenericNotificationArguments"/> class.
         /// </summary>
-        /// <param name="playerId"></param>
-        /// <param name="outgoingPackets"></param>
-        public GenericNotificationArguments(params IOutgoingPacket[] outgoingPackets)
+        /// <param name="outgoingPackets">The packets to send as part of this notification.</param>
+        /// <param name="playerIds">The ids of the players that this notification is intended for.</param>
+        public GenericNotificationArguments(IEnumerable<IOutgoingPacket> outgoingPackets, params Guid[] playerIds)
         {
             if (outgoingPackets == null || !outgoingPackets.Any())
             {
                 throw new ArgumentNullException(nameof(outgoingPackets));
             }
 
+            if (playerIds == null || !playerIds.Any())
+            {
+                throw new ArgumentNullException(nameof(playerIds));
+            }
+
             this.OutgoingPackets = outgoingPackets;
+            this.PlayerIds = playerIds;
         }
 
+        /// <summary>
+        /// Gets the packets to be included in this notification.
+        /// </summary>
         public IEnumerable<IOutgoingPacket> OutgoingPackets { get; }
+
+        /// <summary>
+        /// Gets the ids of the players for which the notification is intended for.
+        /// </summary>
+        public IEnumerable<Guid> PlayerIds { get; }
     }
 }

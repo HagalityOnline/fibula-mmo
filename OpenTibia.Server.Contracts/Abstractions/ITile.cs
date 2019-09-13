@@ -6,21 +6,33 @@
 
 namespace OpenTibia.Server.Contracts.Abstractions
 {
+    using System;
     using System.Collections.Generic;
     using OpenTibia.Data.Contracts.Enumerations;
     using OpenTibia.Server.Contracts.Structs;
 
+    /// <summary>
+    /// Interface for a map tile.
+    /// </summary>
     public interface ITile
     {
-        bool HasCollisionEvents { get; }
-
-        IEnumerable<IItem> ItemsWithCollision { get; }
-
-        bool HasSeparationEvents { get; }
-
-        IEnumerable<IItem> ItemsWithSeparation { get; }
-
+        /// <summary>
+        /// Gets the location of the tile.
+        /// </summary>
         Location Location { get; }
+
+        /// <summary>
+        /// Gets the single ground item that a tile have.
+        /// </summary>
+        IItem Ground { get; }
+
+        IReadOnlyCollection<IItem> TopItems1 { get; }
+
+        IReadOnlyCollection<IItem> TopItems2 { get; }
+
+        IReadOnlyCollection<IItem> DownItems { get; }
+
+        IReadOnlyCollection<Guid> CreatureIds { get; }
 
         byte Flags { get; }
 
@@ -32,15 +44,13 @@ namespace OpenTibia.Server.Contracts.Abstractions
 
         bool BlocksLay { get; }
 
-        IItem Ground { get; }
+        bool HasCollisionEvents { get; }
 
-        IEnumerable<uint> CreatureIds { get; }
+        bool HasSeparationEvents { get; }
 
-        IEnumerable<IItem> TopItems1 { get; }
+        IEnumerable<IItem> ItemsWithCollision { get; }
 
-        IEnumerable<IItem> TopItems2 { get; }
-
-        IEnumerable<IItem> DownItems { get; }
+        IEnumerable<IItem> ItemsWithSeparation { get; }
 
         void AddThing(ref IThing thing, byte count = 1);
 
@@ -60,6 +70,11 @@ namespace OpenTibia.Server.Contracts.Abstractions
 
         bool CanBeWalked(byte avoidDamageType = 0);
 
-        IEnumerable<byte> GetDescription(IPlayer player);
+        /// <summary>
+        /// Gets the tile description bytes as seen by a player.
+        /// </summary>
+        /// <param name="asPlayer">The player to which the tile is being descripted to.</param>
+        /// <returns>The tile description bytes.</returns>
+        IEnumerable<byte> GetDescription(IPlayer asPlayer);
     }
 }

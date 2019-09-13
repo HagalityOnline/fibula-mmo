@@ -6,21 +6,26 @@
 
 namespace OpenTibia.Server.Notifications
 {
+    using System;
+    using System.Collections.Generic;
     using OpenTibia.Common.Helpers;
+    using OpenTibia.Communications.Contracts.Abstractions;
     using OpenTibia.Communications.Packets.Outgoing;
     using OpenTibia.Data.Contracts.Enumerations;
 
-    internal class CreatureRemovedNotification : ProximityNotification
+    internal class CreatureRemovedNotification : Notification
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="CreatureRemovedNotification"/> class.
         /// </summary>
+        /// <param name="determineTargetConnectionsFunction">A function to determine the target connections of this notification.</param>
         /// <param name="arguments">The arguments for this notification.</param>
-        public CreatureRemovedNotification(CreatureRemovedNotificationArguments arguments)
-            : base(audience, playerId)
+        public CreatureRemovedNotification(Func<IEnumerable<IConnection>> determineTargetConnectionsFunction, CreatureRemovedNotificationArguments arguments)
         {
+            determineTargetConnectionsFunction.ThrowIfNull(nameof(determineTargetConnectionsFunction));
             arguments.ThrowIfNull(nameof(arguments));
 
+            this.TargetConnectionsFunction = determineTargetConnectionsFunction;
             this.Arguments = arguments;
         }
 
@@ -30,9 +35,14 @@ namespace OpenTibia.Server.Notifications
         public CreatureRemovedNotificationArguments Arguments { get; }
 
         /// <summary>
+        /// Gets the function for determining target connections for this notification.
+        /// </summary>
+        protected override Func<IEnumerable<IConnection>> TargetConnectionsFunction { get; }
+
+        /// <summary>
         /// Finalizes the notification in preparation to it being sent.
         /// </summary>
-        public override void Prepare()
+        protected override void Prepare()
         {
             var player = Game.Instance.GetCreatureWithId(this.PlayerId);
 

@@ -6,6 +6,7 @@
 
 namespace OpenTibia.Communications.Handlers.Game
 {
+    using System.Linq;
     using OpenTibia.Communications.Contracts.Abstractions;
     using OpenTibia.Communications.Contracts.Enumerations;
     using OpenTibia.Communications.Handlers;
@@ -14,7 +15,6 @@ namespace OpenTibia.Communications.Handlers.Game
     using OpenTibia.Server.Contracts.Abstractions;
     using OpenTibia.Server.Contracts.Enumerations;
     using OpenTibia.Server.Contracts.Structs;
-    using System.Linq;
 
     public class ItemUseHandler : GameHandler
     {

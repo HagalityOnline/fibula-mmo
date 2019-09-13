@@ -57,6 +57,14 @@ namespace OpenTibia.Server.Contracts.Structs
             };
         }
 
+        public static bool operator ==(Location origin, Location targetLocation) => origin.X == targetLocation.X && origin.Y == targetLocation.Y && origin.Z == targetLocation.Z;
+
+        public static bool operator !=(Location origin, Location targetLocation) => origin.X != targetLocation.X || origin.Y != targetLocation.Y || origin.Z != targetLocation.Z;
+
+        public static bool operator >(Location first, Location second) => first.X > second.X || first.Y > second.Y || first.Z > second.Z;
+
+        public static bool operator <(Location first, Location second) => first.X < second.X || first.Y < second.Y || first.Z < second.Z;
+
         public Slot Slot => (Slot)Convert.ToByte(this.Y);
 
         public byte Container => Convert.ToByte(this.Y - 0x40);
@@ -93,22 +101,9 @@ namespace OpenTibia.Server.Contracts.Structs
             return (this.X, this.Y, this.Z).GetHashCode();
         }
 
-        public static bool operator ==(Location origin, Location targetLocation) => origin.X == targetLocation.X && origin.Y == targetLocation.Y && origin.Z == targetLocation.Z;
-
-        public static bool operator !=(Location origin, Location targetLocation) => origin.X != targetLocation.X || origin.Y != targetLocation.Y || origin.Z != targetLocation.Z;
-
-        public static bool operator >(Location first, Location second) => first.X > second.X || first.Y > second.Y || first.Z > second.Z;
-
-        public static bool operator <(Location first, Location second) => first.X < second.X || first.Y < second.Y || first.Z < second.Z;
-
-        public static long[] GetOffsetBetween(Location origin, Location targetLocation)
+        public static (long xOffset, long yOffset, int zOffset) GetOffsetBetween(Location origin, Location targetLocation)
         {
-            return new[]
-            {
-                (long)origin.X - targetLocation.X,
-                (long)origin.Y - targetLocation.Y,
-                (long)origin.Z - targetLocation.Z,
-            };
+            return ((long)origin.X - targetLocation.X, (long)origin.Y - targetLocation.Y, (int)origin.Z - targetLocation.Z);
         }
 
         public Direction DirectionTo(Location targetLocation, bool returnDiagonals = false)

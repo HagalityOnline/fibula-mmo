@@ -6,6 +6,7 @@
 
 namespace OpenTibia.Server.Notifications
 {
+    using System;
     using OpenTibia.Server.Contracts.Abstractions;
     using OpenTibia.Server.Contracts.Structs;
 
@@ -20,7 +21,7 @@ namespace OpenTibia.Server.Notifications
         /// <param name="toLocation"></param>
         /// <param name="toStackPos"></param>
         /// <param name="wasTeleport"></param>
-        public CreatureMovedNotificationArguments(uint creatureId, Location fromLocation, byte fromStackPos, Location toLocation, byte toStackPos, bool wasTeleport)
+        public CreatureMovedNotificationArguments(Guid creatureId, Location fromLocation, byte fromStackPos, Location toLocation, byte toStackPos, bool wasTeleport)
         {
             var locationDiff = fromLocation - toLocation;
 
@@ -42,6 +43,6 @@ namespace OpenTibia.Server.Notifications
 
         public Location NewLocation { get; }
 
-        public uint CreatureId { get; }
+        public Guid CreatureId { get; }
     }
 }

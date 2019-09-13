@@ -12,27 +12,27 @@ namespace OpenTibia.Server.Contracts.Abstractions
 
     public interface IScriptFactory
     {
-        void Change(IGame gameInstance, ref IThing thing, ushort toItemId, byte unknown);
+        void Change(ref IThing thing, ushort toItemId, byte unknown);
 
-        void ChangeOnMap(IGame gameInstance, Location location, ushort fromItemId, ushort toItemId, byte unknown);
+        void ChangeOnMap(Location location, ushort fromItemId, ushort toItemId, byte unknown);
 
-        void ChangeRel(IGame gameInstance, IThing fromThing, Location locationOffset, ushort fromItemId, ushort toItemId, byte unknown);
+        void ChangeRel(IThing fromThing, Location locationOffset, ushort fromItemId, ushort toItemId, byte unknown);
 
         bool CountObjects(IThing thingAt, string comparer, ushort value);
 
-        void Create(IGame gameInstance, IThing atThing, ushort itemId, byte unknown);
+        void Create(IThing atThing, ushort itemId, byte unknown);
 
-        void CreateOnMap(IGame gameInstance, Location location, ushort itemId, byte unknown);
+        void CreateOnMap(Location location, ushort itemId, byte unknown);
 
-        void Damage(IGame gameInstance, IThing damagingThing, IThing damagedThing, byte damageSourceType, ushort damageValue);
+        void Damage(IThing damagingThing, IThing damagedThing, byte damageSourceType, ushort damageValue);
 
-        void Delete(IGame gameInstance, IThing thing);
+        void Delete(IThing thing);
 
-        void DeleteOnMap(IGame gameInstance, Location location, ushort itemId);
+        void DeleteOnMap(Location location, ushort itemId);
 
-        void Effect(IGame gameInstance, IThing thing, byte effectByte);
+        void Effect(IThing thing, byte effectByte);
 
-        void EffectOnMap(IGame gameInstance, Location location, byte effectByte);
+        void EffectOnMap(Location location, byte effectByte);
 
         bool HasFlag(IThing itemThing, string flagStr);
 
@@ -42,9 +42,9 @@ namespace OpenTibia.Server.Contracts.Abstractions
 
         bool HasRight(IPlayer user, string rightStr);
 
-        void InvokeAction(IGame gameInstance, ref IThing obj1, ref IThing obj2, ref IPlayer user, string methodName, params object[] parameters);
+        void InvokeAction(ref IThing obj1, ref IThing obj2, ref IPlayer user, string methodName, params object[] parameters);
 
-        bool InvokeCondition(IGame gameInstance, IThing obj1, IThing obj2, IPlayer user, string methodName, params object[] parameters);
+        bool InvokeCondition(IThing obj1, IThing obj2, IPlayer user, string methodName, params object[] parameters);
 
         bool IsCreature(IThing thing);
 
@@ -52,7 +52,7 @@ namespace OpenTibia.Server.Contracts.Abstractions
 
         bool IsHouseOwner(IThing thing, IPlayer user);
 
-        bool IsObjectThere(IGame gameInstance, Location location, ushort typeId);
+        bool IsObjectThere(Location location, ushort typeId);
 
         bool IsPlayer(IThing thing);
 
@@ -60,21 +60,21 @@ namespace OpenTibia.Server.Contracts.Abstractions
 
         bool IsType(IThing thing, ushort typeId);
 
-        void Logout(IGame gameInstance, IPlayer user);
+        void Logout(IPlayer user);
 
         bool MayLogout(IPlayer user);
 
-        void MonsterOnMap(IGame gameInstance, Location location, ushort monsterId);
+        void MonsterOnMap(Location location, ushort monsterId);
 
-        void Move(IGame gameInstance, IThing thingToMove, Location targetLocation);
+        void Move(IThing thingToMove, Location targetLocation);
 
-        void MoveRel(IGame gameInstance, ICreature user, IThing objectUsed, Location locationOffset);
+        void MoveRel(ICreature user, IThing objectUsed, Location locationOffset);
 
-        void MoveTop(IGame gameInstance, IThing fromThing, Location targetLocation);
+        void MoveTop(IThing fromThing, Location targetLocation);
 
-        void MoveTopOnMap(IGame gameInstance, Location fromLocation, ushort itemId, Location toLocation);
+        void MoveTopOnMap(Location fromLocation, ushort itemId, Location toLocation);
 
-        void MoveTopRel(IGame gameInstance, IThing fromThing, Location locationOffset);
+        void MoveTopRel(IThing fromThing, Location locationOffset);
 
         bool Random(byte value);
 

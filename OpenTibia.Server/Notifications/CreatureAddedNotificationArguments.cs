@@ -19,22 +19,15 @@ namespace OpenTibia.Server.Notifications
         /// <summary>
         /// Initializes a new instance of the <see cref="CreatureAddedNotificationArguments"/> class.
         /// </summary>
-        /// <param name="location">The location at which the creature was added.</param>
         /// <param name="creature">The creature that was added.</param>
         /// <param name="addEffect">Optional. The effect to display.</param>
-        public CreatureAddedNotificationArguments(Location location, ICreature creature, AnimatedEffect addEffect = AnimatedEffect.None)
+        public CreatureAddedNotificationArguments(ICreature creature, AnimatedEffect addEffect = AnimatedEffect.None)
         {
             creature.ThrowIfNull(nameof(creature));
 
-            this.Location = location;
             this.Creature = creature;
             this.AddedEffect = addEffect;
         }
-
-        /// <summary>
-        /// Gets the location of the creature added.
-        /// </summary>
-        public Location Location { get; }
 
         /// <summary>
         /// Gets the creatue added.

@@ -36,7 +36,7 @@ namespace OpenTibia.Server
         /// <param name="manapoints"></param>
         protected Creature(
             IGame gameInstance,
-            uint id,
+            Guid id,
             string name,
             string article,
             ushort maxHitpoints,
@@ -208,14 +208,6 @@ namespace OpenTibia.Server
 
         protected IGame Game { get; }
 
-        public static uint GetNewId()
-        {
-            lock (IdLock)
-            {
-                return idCounter++; // we got 2^32 ids to give per game run... enough!
-            }
-        }
-
         protected virtual void CheckPendingActions(IThing thingChanged, ThingStateChangedEventArgs eventAgrs) { }
 
         // ~CreatureId()
@@ -255,7 +247,9 @@ namespace OpenTibia.Server
 
         public bool CanSee(ICreature otherCreature)
         {
-            return !otherCreature.IsInvisible || this.CanSeeInvisible;
+            otherCreature.ThrowIfNull(nameof(otherCreature));
+
+            return (!otherCreature.IsInvisible || this.CanSeeInvisible) && this.CanSee(otherCreature.Location);
         }
 
         public bool CanSee(Location pos)

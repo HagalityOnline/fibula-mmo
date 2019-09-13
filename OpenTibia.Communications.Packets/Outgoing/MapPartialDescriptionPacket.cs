@@ -16,7 +16,7 @@ namespace OpenTibia.Communications.Packets.Outgoing
         /// Initializes a new instance of the <see cref="MapPartialDescriptionPacket"/> class.
         /// </summary>
         /// <param name="mapDescriptionType"></param>
-        public MapPartialDescriptionPacket(OutgoingGamePacketType mapDescriptionType)
+        public MapPartialDescriptionPacket(OutgoingGamePacketType mapDescriptionType, byte[] descriptionBytes)
         {
             if (mapDescriptionType != OutgoingGamePacketType.MapSliceEast &&
                 mapDescriptionType != OutgoingGamePacketType.MapSliceNorth &&
@@ -29,6 +29,7 @@ namespace OpenTibia.Communications.Packets.Outgoing
             }
 
             this.PacketType = (byte)mapDescriptionType;
+            this.DescriptionBytes = descriptionBytes;
         }
 
         public byte PacketType { get; }

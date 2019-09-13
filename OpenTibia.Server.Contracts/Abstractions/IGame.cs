@@ -22,8 +22,6 @@ namespace OpenTibia.Server.Contracts.Abstractions
     {
         DateTimeOffset CombatSynchronizationTime { get; }
 
-        ConcurrentDictionary<Guid, ICreature> Creatures { get; }
-
         DateTimeOffset CurrentTime { get; }
 
         byte LightColor { get; }
@@ -32,15 +30,20 @@ namespace OpenTibia.Server.Contracts.Abstractions
 
         WorldState Status { get; }
 
-        bool CanThrowBetween(Location fromLocation, Location toLocation, bool checkLineOfSight = true);
+        /// <summary>
+        /// Runs the main game processing thread which begins advancing time on the game engine.
+        /// </summary>
+        /// <param name="cancellationToken">A token to observe for cancellation.</param>
+        /// <returns>A <see cref="Task"/> representing the asynchronous operation.</returns>
+        Task RunAsync(CancellationToken cancellationToken);
+
+        bool ScheduleEvent(IEvent newEvent, TimeSpan delay = default);
+
+
 
         byte[] GetMapTileDescription(uint requestingPlayerId, Location location);
 
         IEnumerable<uint> GetSpectatingCreatureIds(Location location);
-
-        ITile GetTileAt(Location location);
-
-        bool InLineOfSight(Location fromLocation, Location toLocation);
 
         void NotifyAllPlayers(Func<IConnection, INotification> notificationFunc);
 
@@ -54,21 +57,10 @@ namespace OpenTibia.Server.Contracts.Abstractions
 
         void OnContainerContentUpdated(IContainer container, byte index, IItem item);
 
-        IEnumerable<Direction> Pathfind(Location startLocation, Location targetLocation, out Location endLocation, int maxStepsCount = 100);
-
         void RequestCombatOp(ICombatOperation newOp);
-
-        bool ScheduleEvent(IEvent newEvent, TimeSpan delay = default);
 
         void SignalAttackReady();
 
         void SignalWalkAvailable();
-
-        /// <summary>
-        ///
-        /// </summary>
-        /// <param name="cancellationToken"></param>
-        /// <returns>A <see cref="Task"/> representing the result of the asynchronous operation.</returns>
-        Task RunAsync(CancellationToken cancellationToken);
     }
 }

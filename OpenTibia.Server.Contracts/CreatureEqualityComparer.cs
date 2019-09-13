@@ -18,7 +18,7 @@ namespace OpenTibia.Server.Contracts
 
         public int GetHashCode(ICreature obj)
         {
-            return (int)obj.Id;
+            return obj.Id.GetHashCode();
         }
     }
 }

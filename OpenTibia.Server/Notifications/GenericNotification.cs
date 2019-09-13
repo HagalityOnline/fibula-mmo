@@ -14,19 +14,19 @@ namespace OpenTibia.Server.Notifications
     /// <summary>
     /// Class that represents a generic notification.
     /// </summary>
-    internal class GenericNotification : SpecificPlayersNotification
+    internal class GenericNotification : Notification
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="GenericNotification"/> class.
         /// </summary>
         /// <param name="targetConnectionsFunc">A reference to determine the target connections of this notification.</param>
         /// <param name="arguments">The arguments for this notification.</param>
-        /// <param name="playerIds">The ids of the players that this notification is intended for.</param>
-        public GenericNotification(Func<IEnumerable<IConnection>> targetConnectionsFunc, GenericNotificationArguments arguments, params Guid[] playerIds)
-            : base(targetConnectionsFunc, playerIds)
+        public GenericNotification(Func<IEnumerable<IConnection>> targetConnectionsFunc, GenericNotificationArguments arguments)
         {
+            targetConnectionsFunc.ThrowIfNull(nameof(targetConnectionsFunc));
             arguments.ThrowIfNull(nameof(arguments));
 
+            this.TargetConnectionsFunction = targetConnectionsFunc;
             this.Arguments = arguments;
         }
 
@@ -36,9 +36,14 @@ namespace OpenTibia.Server.Notifications
         public GenericNotificationArguments Arguments { get; }
 
         /// <summary>
+        /// Gets the function for determining target connections for this notification.
+        /// </summary>
+        protected override Func<IEnumerable<IConnection>> TargetConnectionsFunction { get; }
+
+        /// <summary>
         /// Finalizes the notification in preparation to it being sent.
         /// </summary>
-        public override void Prepare()
+        protected override void Prepare()
         {
             foreach (var packet in this.Arguments.OutgoingPackets)
             {

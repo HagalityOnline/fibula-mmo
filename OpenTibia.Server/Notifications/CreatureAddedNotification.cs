@@ -6,7 +6,11 @@
 
 namespace OpenTibia.Server.Notifications
 {
+    using System;
+    using System.Collections.Generic;
     using OpenTibia.Common.Helpers;
+    using OpenTibia.Communications;
+    using OpenTibia.Communications.Contracts.Abstractions;
     using OpenTibia.Communications.Packets.Outgoing;
     using OpenTibia.Data.Contracts.Enumerations;
     using OpenTibia.Server.Contracts.Abstractions;
@@ -14,18 +18,22 @@ namespace OpenTibia.Server.Notifications
     /// <summary>
     /// Class that represents a notification for creature being added in sight to players who are close.
     /// </summary>
-    internal class CreatureAddedNotification : ProximityNotification
+    internal class CreatureAddedNotification : Notification
     {
         /// <summary>
         /// Initializes a new instance of the <see cref="CreatureAddedNotification"/> class.
         /// </summary>
+        /// <param name="creatureFinder">A reference to the creature finder.</param>
+        /// <param name="determineTargetConnectionsFunction">A function to determine the target connections of this notification.</param>
         /// <param name="arguments">The arguments for this notification.</param>
-        public CreatureAddedNotification(CreatureAddedNotificationArguments arguments)
-            : base(arguments?.Location ?? default)
+        public CreatureAddedNotification(ICreatureFinder creatureFinder, Func<IEnumerable<IConnection>> determineTargetConnectionsFunction, CreatureAddedNotificationArguments arguments)
         {
+            determineTargetConnectionsFunction.ThrowIfNull(nameof(determineTargetConnectionsFunction));
             arguments.ThrowIfNull(nameof(arguments));
 
+            this.TargetConnectionsFunction = determineTargetConnectionsFunction;
             this.Arguments = arguments;
+            this.CreatureFinder = creatureFinder;
         }
 
         /// <summary>
@@ -34,21 +42,70 @@ namespace OpenTibia.Server.Notifications
         public CreatureAddedNotificationArguments Arguments { get; }
 
         /// <summary>
+        /// Gets the reference to the creature finder.
+        /// </summary>
+        public ICreatureFinder CreatureFinder { get; }
+
+        /// <summary>
+        /// Gets the function for determining target connections for this notification.
+        /// </summary>
+        protected override Func<IEnumerable<IConnection>> TargetConnectionsFunction { get; }
+
+        /// <summary>
         /// Finalizes the notification in preparation to it being sent.
         /// </summary>
-        public override void Prepare()
+        protected override void Prepare()
         {
-            if (!(Game.Instance.GetCreatureWithId(this.PlayerId) is IPlayer player))
-            {
-                return;
-            }
-
             if (this.Arguments.AddedEffect != AnimatedEffect.None)
             {
                 this.Packets.Add(new MagicEffectPacket(this.Arguments.Creature.Location, this.Arguments.AddedEffect));
             }
+        }
 
-            this.Packets.Add(new AddCreaturePacket(this.Arguments.Creature, player.KnowsCreatureWithId(this.Arguments.Creature.Id), player.ChooseToRemoveFromKnownSet()));
+        /// <summary>
+        /// Sends the notification using the supplied connection.
+        /// </summary>
+        protected override void Send()
+        {
+            IEnumerable<IConnection> connections = null;
+
+            try
+            {
+                INetworkMessage outboundMessage = new NetworkMessage();
+
+                foreach (var packet in this.Packets)
+                {
+                    packet.WriteToMessage(outboundMessage);
+                }
+
+                connections = this.TargetConnectionsFunction?.Invoke();
+
+                if (connections == null)
+                {
+                    // TODO: log this?
+                    return;
+                }
+
+                foreach (var connection in connections)
+                {
+                    if (!(this.CreatureFinder.FindCreatureById(connection.PlayerId) is IPlayer player))
+                    {
+                        continue;
+                    }
+
+                    var playerTailoredMessage = outboundMessage.Copy();
+
+                    var addCreaturePacket = new AddCreaturePacket(this.Arguments.Creature, player.KnowsCreatureWithId(this.Arguments.Creature.Id), player.ChooseToRemoveFromKnownSet());
+
+                    addCreaturePacket.WriteToMessage(playerTailoredMessage);
+
+                    connection.Send(playerTailoredMessage);
+                }
+            }
+            catch (Exception)
+            {
+                // TODO: log this.
+            }
         }
     }
 }

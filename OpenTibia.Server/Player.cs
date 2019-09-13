@@ -38,7 +38,7 @@ namespace OpenTibia.Server
         /// <param name="manapoints"></param>
         public Player(
             IGame gameInstance,
-            uint id,
+            Guid id,
             string name,
             ushort maxHitpoints,
             ushort maxManapoints,
@@ -106,7 +106,7 @@ namespace OpenTibia.Server
 
         public IAction PendingAction { get; private set; }
 
-        public bool CanLogout => this.AutoAttackTargetId == 0;
+        public bool IsLogoutAllowed => this.AutoAttackTargetId == 0;
 
         private IDictionary<uint, long> KnownCreatures { get; }
 
@@ -365,7 +365,7 @@ namespace OpenTibia.Server
 
         public bool AttemptLogout()
         {
-            if (!this.CanLogout)
+            if (!this.IsLogoutAllowed)
             {
                 return false;
             }

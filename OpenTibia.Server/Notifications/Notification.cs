@@ -8,7 +8,9 @@ namespace OpenTibia.Server.Notifications
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
     using OpenTibia.Common.Helpers;
+    using OpenTibia.Communications;
     using OpenTibia.Communications.Contracts.Abstractions;
     using OpenTibia.Scheduling;
     using OpenTibia.Scheduling.Contracts.Enumerations;
@@ -22,16 +24,11 @@ namespace OpenTibia.Server.Notifications
         /// <summary>
         /// Initializes a new instance of the <see cref="Notification"/> class.
         /// </summary>
-        /// <param name="determineTargetConnectionsFunction">A function to determine the target connections of this notification.</param>
-        protected Notification(Func<IEnumerable<IConnection>> determineTargetConnectionsFunction)
+        protected Notification()
             : base(EvaluationTime.OnSchedule)
         {
-            determineTargetConnectionsFunction.ThrowIfNull(nameof(determineTargetConnectionsFunction));
-
             this.Packets = new List<IOutgoingPacket>();
             this.ActionsOnPass.Add(new GenericEventAction(this.Send));
-
-            this.TargetConnectionsFunction = determineTargetConnectionsFunction;
         }
 
         /// <summary>
@@ -42,16 +39,54 @@ namespace OpenTibia.Server.Notifications
         /// <summary>
         /// Gets the function for determining target connections for this notification.
         /// </summary>
-        protected Func<IEnumerable<IConnection>> TargetConnectionsFunction { get; }
+        protected abstract Func<IEnumerable<IConnection>> TargetConnectionsFunction { get; }
 
         /// <summary>
         /// Finalizes the notification in preparation to it being sent.
         /// </summary>
-        public abstract void Prepare();
+        protected abstract void Prepare();
 
         /// <summary>
         /// Sends the notification using the supplied connection.
         /// </summary>
-        protected abstract void Send();
+        protected virtual void Send()
+        {
+            this.Prepare();
+
+            if (!this.Packets.Any())
+            {
+                // TODO: log this?
+                return;
+            }
+
+            IEnumerable<IConnection> connections = null;
+
+            try
+            {
+                INetworkMessage outboundMessage = new NetworkMessage();
+
+                foreach (var packet in this.Packets)
+                {
+                    packet.WriteToMessage(outboundMessage);
+                }
+
+                connections = this.TargetConnectionsFunction?.Invoke();
+
+                if (connections == null)
+                {
+                    // TODO: log this?
+                    return;
+                }
+
+                foreach (var connection in connections)
+                {
+                    connection.Send(outboundMessage.Copy());
+                }
+            }
+            catch (Exception)
+            {
+                // TODO: log this.
+            }
+        }
     }
 }

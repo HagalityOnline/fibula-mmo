@@ -9,6 +9,7 @@ namespace OpenTibia.Server.Events
     using System;
     using System.Collections.Generic;
     using System.Linq;
+    using OpenTibia.Common.Helpers;
     using OpenTibia.Server.Contracts.Abstractions;
     using OpenTibia.Server.Contracts.Enumerations;
     using OpenTibia.Server.Parsing.Grammar;
@@ -24,10 +25,15 @@ namespace OpenTibia.Server.Events
         /// <summary>
         /// Initializes a new instance of the <see cref="BaseItemEvent"/> class.
         /// </summary>
+        /// <param name="scriptFactory"></param>
         /// <param name="conditionSet"></param>
         /// <param name="actionSet"></param>
-        public BaseItemEvent(IList<string> conditionSet, IList<string> actionSet)
+        public BaseItemEvent(IScriptFactory scriptFactory, IList<string> conditionSet, IList<string> actionSet)
         {
+            scriptFactory.ThrowIfNull(nameof(scriptFactory));
+
+            this.ScriptFactory = scriptFactory;
+
             this.Conditions = this.ParseFunctions(conditionSet);
             this.Actions = this.ParseFunctions(actionSet);
 
@@ -42,6 +48,8 @@ namespace OpenTibia.Server.Events
 
         public IPlayer User { get; protected set; }
 
+        public IScriptFactory ScriptFactory { get; }
+
         public IEnumerable<IItemEventFunction> Actions { get; }
 
         public IEnumerable<IItemEventFunction> Conditions { get; protected set; }
@@ -50,7 +58,7 @@ namespace OpenTibia.Server.Events
         {
             get
             {
-                return this.isSetup && this.Conditions.All(condition => Functions.InvokeCondition(this.Obj1, this.Obj2, this.User, condition.FunctionName, condition.Parameters));
+                return this.isSetup && this.Conditions.All(condition => this.ScriptFactory.InvokeCondition(this.Obj1, this.Obj2, this.User, condition.FunctionName, condition.Parameters));
             }
         }
 
@@ -78,7 +86,7 @@ namespace OpenTibia.Server.Events
                 var obj2Result = this.Obj2;
                 var userResult = this.User;
 
-                Functions.InvokeAction(ref obj1Result, ref obj2Result, ref userResult, action.FunctionName, action.Parameters);
+                this.ScriptFactory.InvokeAction(ref obj1Result, ref obj2Result, ref userResult, action.FunctionName, action.Parameters);
 
                 this.Obj1 = obj1Result;
                 this.Obj2 = obj2Result;
@@ -92,30 +100,33 @@ namespace OpenTibia.Server.Events
 
             const string specialCaseNoOperationAction = "NOP";
 
-            foreach (var str in stringSet)
+            if (stringSet != null)
             {
-                if (specialCaseNoOperationAction.Equals(str))
+                foreach (var str in stringSet)
                 {
-                    continue;
+                    if (specialCaseNoOperationAction.Equals(str))
+                    {
+                        continue;
+                    }
+
+                    var resultFunction = CipGrammar.Function.TryParse(str);
+
+                    if (resultFunction.WasSuccessful)
+                    {
+                        functionList.Add(new ItemEventFunction(resultFunction.Value.Name, resultFunction.Value.Parameters));
+
+                        continue;
+                    }
+
+                    var resultComparison = CipGrammar.Comparison.TryParse(str);
+
+                    if (!resultComparison.WasSuccessful)
+                    {
+                        throw new ParseException($"Failed to parse string {str} into a function or function comparison.");
+                    }
+
+                    functionList.Add(new ItemEventFunctionComparison(resultComparison.Value.Name, resultComparison.Value.Type, resultComparison.Value.CompareToIdentifier, resultComparison.Value.Parameters));
                 }
-
-                var resultFunction = CipGrammar.Function.TryParse(str);
-
-                if (resultFunction.WasSuccessful)
-                {
-                    functionList.Add(new ItemEventFunction(resultFunction.Value.Name, resultFunction.Value.Parameters));
-
-                    continue;
-                }
-
-                var resultComparison = CipGrammar.Comparison.TryParse(str);
-
-                if (!resultComparison.WasSuccessful)
-                {
-                    throw new ParseException($"Failed to parse string {str} into a function or function comparison.");
-                }
-
-                functionList.Add(new ItemEventFunctionComparison(resultComparison.Value.Name, resultComparison.Value.Type, resultComparison.Value.CompareToIdentifier, resultComparison.Value.Parameters));
             }
 
             return functionList;
